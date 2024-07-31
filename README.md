@@ -10,5 +10,7 @@ The Docker Management GUI is a desktop application designed to simplify Docker c
 - **Start/Stop/Remove Containers**: Provides buttons to control the lifecycle of each container directly from the GUI.
 - **View Logs**: Opens a new terminal window to display real-time logs for a selected container, allowing users to monitor container output.
 - **Monitor Resource Usage**: Tracks and visualizes CPU, memory, and disk usage for each running container with real-time graphs.
+- **Deploy Docker Compose**: Allows users to deploy Docker Compose files, making it easy to set up multi-container applications.
+- **Container Isolation**: Provides a way to manage container-specific settings and view container logs in isolation from the host system.
 
 
