@@ -1,6 +1,7 @@
 import os
-import time
+import subprocess
 import sys
+import time
 
 def is_running_in_docker():
     # Check for .dockerenv file
@@ -15,6 +16,15 @@ def is_running_in_docker():
                     return True
     except Exception as e:
         print(f"Error checking cgroup info: {e}", flush=True)
+
+    # Additional check to determine if the environment is Docker
+    try:
+        # Run a Docker command to check if Docker is available
+        result = subprocess.run(['docker', 'info'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=1)
+        if result.returncode == 0:
+            return True
+    except Exception as e:
+        print(f"Error running Docker command: {e}", flush=True)
     
     return False
 
