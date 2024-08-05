@@ -1,15 +1,20 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
+    QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QFormLayout, 
+    QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox
+)
 from docker_client import get_docker_client
 from resource_monitor import ResourceGraphWidget, ResourceMonitorThread
 from terminal_utils import terminal_emulator
 import docker
 import sys
 import subprocess
+from docker_client import DockerClient
 
 class DockerGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.docker_client = get_docker_client()  # Use the DockerClient instance
+        self.docker_client = get_docker_client()
         self.initUI()
 
     def initUI(self):
@@ -24,6 +29,12 @@ class DockerGUI(QWidget):
             ("List Containers", self.list_containers),
             ("Create Container", self.create_container_prompt),
             ("Deploy Compose File", self.deploy_compose_prompt),
+            ("List Images", self.list_images),
+            ("List Networks", self.list_networks),
+            ("List Volumes", self.list_volumes),
+            ("Create Network", self.create_network_prompt),
+            ("Create Volume", self.create_volume_prompt),
+            ("Prune Unused Volumes", self.prune_volumes)
         ]
 
         for text, func in buttons:
@@ -40,6 +51,12 @@ class DockerGUI(QWidget):
         self.setLayout(layout)
 
         self.container_window = None
+        self.image_window = None
+        self.network_window = None
+        self.volume_window = None
+        self.create_volume_dialog = None
+
+
 
     def list_containers(self):
         try:
@@ -54,50 +71,247 @@ class DockerGUI(QWidget):
 
         self.container_window = QWidget()
         self.container_window.setWindowTitle("Containers")
-        self.container_window.setGeometry(100, 100, 800, 600)
+        self.container_window.setGeometry(100, 100, 1300, 600)
 
         layout = QVBoxLayout()
 
         table = QTableWidget()
         table.setRowCount(len(containers))
-        table.setColumnCount(9)  # Update column count
-        table.setHorizontalHeaderLabels(["ID", "Name", "Status", "Start", "Stop", "Remove", "Shell", "Monitor", "Logs"])
+        table.setColumnCount(13)
+        table.setHorizontalHeaderLabels([
+            "ID", "Name", "Status", "Start", "Stop", "Pause", "Unpause", 
+            "Logs", "Shell", "Remove", "Inspect", "Stats", "Monitor"
+        ])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
         for row, container in enumerate(containers):
             table.setItem(row, 0, QTableWidgetItem(container.id))
             table.setItem(row, 1, QTableWidgetItem(container.name))
             table.setItem(row, 2, QTableWidgetItem(container.status))
-            table.setCellWidget(row, 3, self.create_action_button("Start", container, self.start_container))
-            table.setCellWidget(row, 4, self.create_action_button("Stop", container, self.stop_container))
-            table.setCellWidget(row, 5, self.create_action_button("Remove", container, self.remove_container))
-            table.setCellWidget(row, 6, self.create_action_button("Shell", container, self.open_shell))
-            table.setCellWidget(row, 7, self.create_action_button("Monitor", container, self.open_monitor))
-            table.setCellWidget(row, 8, self.create_action_button("Logs", container, self.open_logs))  # Add Logs button
+
+            start_button = self.create_action_button("Start", container, self.start_container)
+            stop_button = self.create_action_button("Stop", container, self.stop_container)
+            pause_button = self.create_action_button("Pause", container, self.pause_container)
+            unpause_button = self.create_action_button("Unpause", container, self.unpause_container)
+            logs_button = self.create_action_button("Logs", container, self.open_logs)
+            shell_button = self.create_action_button("Shell", container, self.open_shell)
+            remove_button = self.create_action_button("Remove", container, self.remove_container)
+            inspect_button = self.create_action_button("Inspect", container, self.inspect_container)
+            stats_button = self.create_action_button("Stats", container, self.show_stats)
+            monitor_button = self.create_action_button("Monitor", container, self.open_monitor)
+
+            table.setCellWidget(row, 3, start_button)
+            table.setCellWidget(row, 4, stop_button)
+            table.setCellWidget(row, 5, pause_button)
+            table.setCellWidget(row, 6, unpause_button)
+            table.setCellWidget(row, 7, logs_button)
+            table.setCellWidget(row, 8, shell_button)
+            table.setCellWidget(row, 9, remove_button)
+            table.setCellWidget(row, 10, inspect_button)
+            table.setCellWidget(row, 11, stats_button)
+            table.setCellWidget(row, 12, monitor_button)
 
         layout.addWidget(table)
         self.container_window.setLayout(layout)
         self.container_window.show()
 
-    def create_action_button(self, text, container, func):
+    def list_images(self):
+        images = self.docker_client.list_images()
+        self.show_images_table(images)
+
+    def show_images_table(self, images):
+        if self.image_window:
+            self.image_window.close()
+
+        self.image_window = QWidget()
+        self.image_window.setWindowTitle("Images")
+        self.image_window.setGeometry(100, 100, 1000, 600)
+
+        layout = QVBoxLayout()
+
+        table = QTableWidget()
+        table.setRowCount(len(images))
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["ID", "Tags", "Remove", "Tag", "Push", "Pull"])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        for row, img in enumerate(images):
+            table.setItem(row, 0, QTableWidgetItem(img['id']))
+            table.setItem(row, 1, QTableWidgetItem(", ".join(img['tags'])))
+
+            table.setCellWidget(row, 2, self.create_action_button("Remove", img, self.remove_image))
+            table.setCellWidget(row, 3, self.create_action_button("Tag", img, self.tag_image))
+            table.setCellWidget(row, 4, self.create_action_button("Push", img, self.push_image))
+            table.setCellWidget(row, 5, self.create_action_button("Pull", img, self.pull_image))
+
+        layout.addWidget(table)
+        self.image_window.setLayout(layout)
+        self.image_window.show()
+
+    def list_networks(self):
+        try:
+            networks = self.docker_client.list_networks()
+            self.show_networks_table(networks)
+        except docker.errors.APIError as e:
+            self.display_result(f"Error listing networks: {e}")
+
+    def show_networks_table(self, networks):
+        if self.network_window:
+            self.network_window.close()
+
+        self.network_window = QWidget()
+        self.network_window.setWindowTitle("Networks")
+        self.network_window.setGeometry(100, 100, 800, 600)
+
+        layout = QVBoxLayout()
+
+        table = QTableWidget()
+        table.setRowCount(len(networks))
+        table.setColumnCount(6)
+        table.setHorizontalHeaderLabels(["Name", "ID", "Driver", "Scope", "Inspect", "Remove"])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        for row, network in enumerate(networks):
+            network_info = network.attrs
+            table.setItem(row, 0, QTableWidgetItem(network.name))
+            table.setItem(row, 1, QTableWidgetItem(network.id))
+            table.setItem(row, 2, QTableWidgetItem(network_info.get('Driver', '')))
+            table.setItem(row, 3, QTableWidgetItem(network_info.get('Scope', '')))
+
+            inspect_button = self.create_action_button("Inspect", network, self.inspect_network)
+            remove_button = self.create_action_button("Remove", network, self.remove_network_prompt)
+
+            table.setCellWidget(row, 4, inspect_button)
+            table.setCellWidget(row, 5, remove_button)
+
+        layout.addWidget(table)
+        self.network_window.setLayout(layout)
+        self.network_window.show()
+
+    def list_volumes(self):
+        volumes = self.docker_client.list_volumes()
+        self.show_volumes_table(volumes)
+
+    def show_volumes_table(self, volumes):
+        if self.volume_window and self.volume_window.isVisible():
+            self.volume_window.close()
+
+        self.volume_window = QWidget()
+        self.volume_window.setWindowTitle("Volumes")
+        self.volume_window.setGeometry(100, 100, 800, 600)
+
+        layout = QVBoxLayout()
+        
+        table = QTableWidget()
+        table.setRowCount(len(volumes))
+        table.setColumnCount(5)  # Adjust column count to include action buttons
+        table.setHorizontalHeaderLabels(["Name", "Driver", "Mountpoint", "Inspect", "Remove"])
+        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        for row, volume in enumerate(volumes):
+            table.setItem(row, 0, QTableWidgetItem(volume['name']))
+            table.setItem(row, 1, QTableWidgetItem(volume['driver']))
+            table.setItem(row, 2, QTableWidgetItem(volume['mountpoint']))
+
+            # Create and add action buttons
+            inspect_button = self.create_action_button("Inspect", volume, self.inspect_volume)
+            remove_button = self.create_action_button("Remove", volume, self.remove_volume)
+
+            table.setCellWidget(row, 3, inspect_button)
+            table.setCellWidget(row, 4, remove_button)
+
+        layout.addWidget(table)
+
+        # If the volume window already has a layout, clear it
+        if self.volume_window.layout() is not None:
+            self.clear_layout(self.volume_window.layout())
+
+        self.volume_window.setLayout(layout)
+        self.volume_window.show()
+
+    def clear_layout(layout):
+        if layout is not None:
+            while layout.count():
+                item = layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+                elif item.layout():
+                    clear_layout(item.layout())
+
+    def create_action_button(self, text, volume, func):
         button = QPushButton(text)
-        button.clicked.connect(lambda checked, c=container: func(c))
+        button.clicked.connect(lambda: func(volume))
+        return button
+
+    def inspect_volume(self, volume):
+        volume_info = self.docker_client.inspect_volume(volume['name'])
+        self.display_result(f"Volume Info: {volume_info}")
+
+    def remove_volume(self, volume):
+        volume_name = volume['name']
+
+        reply = QMessageBox.question(self, 'Remove Volume',
+                                    f"Are you sure you want to remove the volume '{volume_name}'?",
+                                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            try:
+                self.docker_client.remove_volume(volume_name)
+                self.list_volumes()  # Refresh the list
+            except docker.errors.APIError as e:
+                self.display_result(f"Error removing volume: {e}")
+
+
+    def prune_volumes(self):
+        try:
+            self.docker_client.prune_volumes()
+            self.display_result("Unused volumes pruned successfully.")
+            self.list_volumes()  # Refresh list
+        except docker.errors.APIError as e:
+            self.display_result(f"Error pruning volumes: {e}")
+
+
+
+    def create_action_button(self, label, item, action):
+        button = QPushButton(label, self)
+        button.clicked.connect(lambda: action(item))
         return button
 
     def start_container(self, container):
-        updated_container = self.docker_client.perform_container_action(container, container.start, "started")
-        if updated_container:
-            self.list_containers()  # Refresh status
+        try:
+            container.start()
+            self.display_result(f"Container {container.name} started successfully.")
+            self.list_containers() 
+        except docker.errors.APIError as e:
+            self.display_result(f"Error starting container: {e}")
 
     def stop_container(self, container):
-        updated_container = self.docker_client.perform_container_action(container, container.stop, "stopped")
-        if updated_container:
-            self.list_containers()  # Refresh status
+        try:
+            container.stop()
+            self.display_result(f"Container {container.name} stopped successfully.")
+            self.list_containers() 
+        except docker.errors.APIError as e:
+            self.display_result(f"Error stopping container: {e}")
 
-    def remove_container(self, container):
-        updated_container = self.docker_client.perform_container_action(container, lambda: container.remove(force=True), "removed")
-        if updated_container:
-            self.list_containers()  # Refresh status
+    def pause_container(self, container):
+        try:
+            container.pause()
+            self.display_result(f"Container {container.name} paused successfully.")
+            self.list_containers() 
+        except docker.errors.APIError as e:
+            self.display_result(f"Error pausing container: {e}")
+
+    def unpause_container(self, container):
+        try:
+            container.unpause()
+            self.display_result(f"Container {container.name} unpaused successfully.")
+            self.list_containers() 
+        except docker.errors.APIError as e:
+            self.display_result(f"Error unpausing container: {e}")
+
+    def open_logs(self, container):
+        logs = container.logs()
+        self.display_result(f"Logs for {container.name}:\n{logs.decode('utf-8')}")
 
     def open_shell(self, container):
         try:
@@ -105,13 +319,20 @@ class DockerGUI(QWidget):
             subprocess.Popen(terminal_command, shell=True)
         except Exception as e:
             self.display_result(f"Error occurred while opening terminal with shell: {e}")
-
-    def open_logs(self, container):
+    def remove_container(self, container):
         try:
-            terminal_command = f"{terminal_emulator} -e 'docker logs -f {container.id}'"
-            subprocess.Popen(terminal_command, shell=True)
-        except Exception as e:
-            self.display_result(f"Error occurred while opening terminal with logs: {e}")
+            container.remove()
+            self.display_result(f"Container {container.name} removed successfully.")
+        except docker.errors.APIError as e:
+            self.display_result(f"Error removing container: {e}")
+
+    def inspect_container(self, container):
+        details = container.attrs
+        self.display_result(f"Details for {container.name}:\n{details}")
+
+    def show_stats(self, container):
+        stats = container.stats(stream=False)
+        self.display_result(f"Stats for {container.name}:\n{stats}")
 
     def open_monitor(self, container):
         self.monitor_window = ResourceGraphWidget(container.name)
@@ -122,29 +343,192 @@ class DockerGUI(QWidget):
         self.monitor_thread.start()
 
     def create_container_prompt(self):
-        dockerfile_path, ok = QInputDialog.getText(self, "Create Container", "Enter path to Dockerfile directory:")
-        if ok and dockerfile_path:
-            self.create_container_from_dockerfile(dockerfile_path)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create Container")
+        dialog.setGeometry(100, 100, 400, 200)
 
-    def create_container_from_dockerfile(self, dockerfile_path):
-        container = self.docker_client.create_container_from_dockerfile(dockerfile_path)
-        if container:
+        layout = QVBoxLayout()
+
+        form_layout = QFormLayout()
+        name_input = QLineEdit()
+        image_input = QLineEdit()
+        form_layout.addRow("Container Name:", name_input)
+        form_layout.addRow("Image Name:", image_input)
+
+        create_button = QPushButton("Create")
+        create_button.clicked.connect(lambda: self.create_container(name_input.text(), image_input.text(), dialog))
+
+        layout.addLayout(form_layout)
+        layout.addWidget(create_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def create_container(self, name, image, dialog):
+        try:
+            container = self.docker_client.create_container(name=name, image=image)
             self.display_result(f"Container {container.name} created successfully.")
-            self.display_result(f"Container ID: {container.id}")
-            self.display_result(f"Container Status: {container.status}")
-            self.display_result(f"Container IP Address: {container.attrs['NetworkSettings']['IPAddress']}")
-            self.list_containers()
+            dialog.close()
+        except docker.errors.APIError as e:
+            self.display_result(f"Error creating container: {e}")
 
     def deploy_compose_prompt(self):
-        compose_file_path, ok = QInputDialog.getText(self, "Deploy Compose File", "Enter path to Docker Compose file:")
-        if ok and compose_file_path:
-            self.docker_client.deploy_compose_file(compose_file_path)
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open Compose File", "", "YAML Files (*.yml *.yaml);;All Files (*)", options=options)
+        if file_path:
+            self.deploy_compose_file(file_path)
 
-    def display_result(self, message):
-        self.result_text.append(message)
+    def deploy_compose_file(self, file_path):
+        try:
+            result = subprocess.run(["docker-compose", "-f", file_path, "up", "-d"], capture_output=True, text=True)
+            self.display_result(result.stdout)
+            if result.stderr:
+                self.display_result(f"Errors:\n{result.stderr}")
+        except subprocess.CalledProcessError as e:
+            self.display_result(f"Error deploying compose file: {e}")
 
-if __name__ == '__main__':
+    def create_network_prompt(self):
+        self.create_network_dialog = QDialog(self)
+        self.create_network_dialog.setWindowTitle("Create Network")
+        self.create_network_dialog.setGeometry(150, 150, 400, 200)
+
+        layout = QFormLayout()
+
+        self.network_name_input = QLineEdit()
+        self.network_driver_input = QLineEdit()
+
+        layout.addRow(QLabel("Network Name:"), self.network_name_input)
+        layout.addRow(QLabel("Driver: (Optional)"), self.network_driver_input)
+
+        create_button = QPushButton("Create Network")
+        create_button.clicked.connect(lambda: self.create_network(self.network_name_input.text(), self.network_driver_input.text()))
+        layout.addWidget(create_button)
+
+        self.create_network_dialog.setLayout(layout)
+        self.create_network_dialog.exec_()
+
+
+    def create_network(self, name, driver):
+        try:
+            self.docker_client.create_network(name, driver)
+            self.display_result(f"Network '{name}' created successfully.")
+            self.create_network_dialog.accept()
+        except docker.errors.APIError as e:
+            self.display_result(f"Error creating network: {e}")
+
+
+    def create_volume_prompt(self):
+        """Prompt user to create a volume."""
+        self.create_volume_dialog = QDialog(self)
+        self.create_volume_dialog.setWindowTitle("Create Volume")
+        self.create_volume_dialog.setGeometry(150, 150, 400, 200)
+
+        layout = QFormLayout()
+
+        self.volume_name_input = QLineEdit()
+        self.driver_input = QLineEdit()
+
+        layout.addRow(QLabel("Volume Name:"), self.volume_name_input)
+        layout.addRow(QLabel("Driver (optional):"), self.driver_input)
+
+        submit_button = QPushButton("Create Volume")
+        submit_button.clicked.connect(self.create_volume_from_dialog)
+        layout.addWidget(submit_button)
+
+        self.create_volume_dialog.setLayout(layout)
+        self.create_volume_dialog.exec_()
+
+
+    def create_volume_from_dialog(self):
+        volume_name = self.volume_name_input.text()
+        driver = self.driver_input.text() or None
+
+        try:
+            self.docker_client.create_volume(volume_name, driver=driver)
+            self.display_result(f"Volume {volume_name} created successfully.")
+            self.list_volumes()  # Refresh list
+        except docker.errors.APIError as e:
+            self.display_result(f"Error creating volume: {e}")
+
+        self.create_volume_dialog.accept()
+
+
+    def create_volume(self, name, driver, dialog):
+        try:
+            volume = self.docker_client.create_volume(name=name, driver=driver)
+            self.display_result(f"Volume {volume.name} created successfully.")
+            dialog.close()
+        except docker.errors.APIError as e:
+            self.display_result(f"Error creating volume: {e}")
+
+    def remove_image(self, image):
+        try:
+            self.docker_client.remove_image(image['id'])
+            self.display_result(f"Image {image['id']} removed successfully.")
+        except docker.errors.APIError as e:
+            self.display_result(f"Error removing image: {e}")
+
+    def tag_image(self, image):
+        repo, ok = QInputDialog.getText(self, "Tag Image", "Enter repository name:")
+        if ok:
+            tag, ok = QInputDialog.getText(self, "Tag Image", "Enter tag name:")
+            if ok:
+                try:
+                    self.docker_client.tag_image(image['id'], repo, tag)
+                    self.display_result(f"Image {image['id']} tagged successfully as {repo}:{tag}.")
+                except docker.errors.APIError as e:
+                    self.display_result(f"Error tagging image: {e}")
+
+    def push_image(self, image):
+        repo, ok = QInputDialog.getText(self, "Push Image", "Enter repository name:")
+        if ok:
+            try:
+                result = subprocess.run(["docker", "push", f"{repo}:{image['tags'][0].split(':')[1]}"], capture_output=True, text=True)
+                self.display_result(result.stdout)
+                if result.stderr:
+                    self.display_result(f"Errors:\n{result.stderr}")
+            except subprocess.CalledProcessError as e:
+                self.display_result(f"Error pushing image: {e}")
+
+    def pull_image(self, image):
+        repo, ok = QInputDialog.getText(self, "Pull Image", "Enter repository name:")
+        if ok:
+            try:
+                result = subprocess.run(["docker", "pull", repo], capture_output=True, text=True)
+                self.display_result(result.stdout)
+                if result.stderr:
+                    self.display_result(f"Errors:\n{result.stderr}")
+            except subprocess.CalledProcessError as e:
+                self.display_result(f"Error pulling image: {e}")
+
+    def inspect_network(self, network):
+        details = network.attrs
+        self.display_result(f"Details for network {network.name}:\n{details}")
+
+    def remove_network_prompt(self, network):
+        reply = QMessageBox.question(
+            self, 'Remove Network', 
+            f"Are you sure you want to remove the network '{network.name}'?", 
+            QMessageBox.Yes | QMessageBox.No, 
+            QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.remove_network(network)
+
+
+    def remove_network(self, network):
+        try:
+            self.docker_client.remove_network(network.id)
+            self.display_result(f"Network '{network.name}' removed successfully.")
+            self.list_networks()  # Refresh the list
+        except docker.errors.APIError as e:
+            self.display_result(f"Error removing network: {e}")
+
+    def display_result(self, result):
+        self.result_text.append(result)
+
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    gui = DockerGUI()
-    gui.show()
+    window = DockerGUI()
+    window.show()
     sys.exit(app.exec_())

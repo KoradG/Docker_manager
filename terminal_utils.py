@@ -1,3 +1,4 @@
+# terminal_utils.py
 import subprocess
 import sys
 
@@ -14,3 +15,9 @@ terminal_emulator = detect_terminal()
 if not terminal_emulator:
     print("No supported terminal emulator found. Please install one of the following: gnome-terminal, xterm, konsole, lxterminal, mate-terminal, terminator.", flush=True)
     sys.exit(1)
+
+def open_terminal_with_command(command):
+    try:
+        subprocess.Popen(command, shell=True)
+    except Exception as e:
+        print(f"Error occurred while opening terminal: {e}", flush=True)
