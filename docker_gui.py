@@ -11,10 +11,22 @@ import sys
 import subprocess
 from docker_client import DockerClient
 
+
 class DockerGUI(QWidget):
     def __init__(self):
         super().__init__()
         self.docker_client = get_docker_client()
+        
+        # Initialize window attributes
+        self.container_window = None
+        self.image_window = None
+        self.network_window = None
+        self.volume_window = None
+        self.create_volume_dialog = None
+        self.create_network_dialog = None
+        self.monitor_window = None
+        self.monitor_thread = None
+
         self.initUI()
 
     def initUI(self):
@@ -34,8 +46,9 @@ class DockerGUI(QWidget):
             ("List Volumes", self.list_volumes),
             ("Create Network", self.create_network_prompt),
             ("Create Volume", self.create_volume_prompt),
-            ("Prune Unused Volumes", self.prune_volumes)
+            ("Prune Unused Volumes", self.prune_volumes),
         ]
+
 
         for text, func in buttons:
             button = QPushButton(text, self)
@@ -50,11 +63,8 @@ class DockerGUI(QWidget):
 
         self.setLayout(layout)
 
-        self.container_window = None
-        self.image_window = None
-        self.network_window = None
-        self.volume_window = None
-        self.create_volume_dialog = None
+    def display_result(self, result):
+        self.result_text.append(result)
 
 
 
@@ -114,6 +124,7 @@ class DockerGUI(QWidget):
         layout.addWidget(table)
         self.container_window.setLayout(layout)
         self.container_window.show()
+
 
     def list_images(self):
         images = self.docker_client.list_images()
@@ -319,10 +330,12 @@ class DockerGUI(QWidget):
             subprocess.Popen(terminal_command, shell=True)
         except Exception as e:
             self.display_result(f"Error occurred while opening terminal with shell: {e}")
+
     def remove_container(self, container):
         try:
             container.remove()
             self.display_result(f"Container {container.name} removed successfully.")
+            self.list_containers() 
         except docker.errors.APIError as e:
             self.display_result(f"Error removing container: {e}")
 
@@ -345,18 +358,24 @@ class DockerGUI(QWidget):
     def create_container_prompt(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("Create Container")
-        dialog.setGeometry(100, 100, 400, 200)
+        dialog.setGeometry(100, 100, 400, 300)
 
         layout = QVBoxLayout()
 
         form_layout = QFormLayout()
         name_input = QLineEdit()
         image_input = QLineEdit()
+        dockerfile_input = QLineEdit()  # New field for Dockerfile location
+        build_context_input = QLineEdit()  # New field for build context
         form_layout.addRow("Container Name:", name_input)
-        form_layout.addRow("Image Name:", image_input)
+        form_layout.addRow("Image Name (if using Dockerfile):", image_input)
+        form_layout.addRow("Dockerfile Path:", dockerfile_input)
+        form_layout.addRow("Build Context Path:", build_context_input)
 
         create_button = QPushButton("Create")
-        create_button.clicked.connect(lambda: self.create_container(name_input.text(), image_input.text(), dialog))
+        create_button.clicked.connect(lambda: self.create_container(
+            name_input.text(), image_input.text(), dockerfile_input.text(), build_context_input.text(), dialog
+        ))
 
         layout.addLayout(form_layout)
         layout.addWidget(create_button)
@@ -364,13 +383,53 @@ class DockerGUI(QWidget):
         dialog.setLayout(layout)
         dialog.exec_()
 
-    def create_container(self, name, image, dialog):
+
+    def create_container(self, name, image, dockerfile_path, build_context, dialog):
+        docker_client = get_docker_client()  # Ensure DockerClient is available
+
+        if dockerfile_path:
+            # Build the Docker image from Dockerfile and create the container
+            container = docker_client.create_container_from_dockerfile(dockerfile_path)
+            if container:
+                self.display_result(f"Container created successfully: {container.id}")
+        elif image:
+            # Create the container using an existing image
+            container = docker_client.create_container(image_name=image, command="", env_vars=None, ports=None, volumes=None, network=None)
+            if container:
+                self.display_result(f"Container created successfully: {container.id}")
+        else:
+            self.display_result("Error: No Dockerfile or image provided.")
+
+        dialog.close()
+
+
+    def create_container_from_dockerfile(self, dockerfile_path):
         try:
-            container = self.docker_client.create_container(name=name, image=image)
-            self.display_result(f"Container {container.name} created successfully.")
-            dialog.close()
+            if not os.path.isdir(dockerfile_path):
+                raise ValueError(f"{dockerfile_path} is not a valid directory.")
+            image_tag = "mydockerimage"  # Tag for the built image
+            # Build the Docker image from the Dockerfile
+            self.build_image_from_dockerfile(dockerfile_path, tag=image_tag)
+            # Create the container using the newly built image
+            container = self.create_container(image_name=image_tag, command="", env_vars=None, ports=None, volumes=None, network=None)
+            return container
+        except Exception as e:
+            print(f"Error occurred while creating container: {e}", flush=True)
+            return None
+
+
+    def create_container_from_image(self, name, image):
+        try:
+            container = self.docker_client.create_container(
+                image=image,
+                name=name,
+                detach=True  # Make sure the container runs in detached mode
+            )
+            self.display_result(f"Container {name} created successfully.")
         except docker.errors.APIError as e:
             self.display_result(f"Error creating container: {e}")
+
+
 
     def deploy_compose_prompt(self):
         options = QFileDialog.Options()
@@ -465,6 +524,7 @@ class DockerGUI(QWidget):
         try:
             self.docker_client.remove_image(image['id'])
             self.display_result(f"Image {image['id']} removed successfully.")
+            self.list_images()
         except docker.errors.APIError as e:
             self.display_result(f"Error removing image: {e}")
 
@@ -520,15 +580,8 @@ class DockerGUI(QWidget):
         try:
             self.docker_client.remove_network(network.id)
             self.display_result(f"Network '{network.name}' removed successfully.")
-            self.list_networks()  # Refresh the list
+            self.list_networks() 
         except docker.errors.APIError as e:
             self.display_result(f"Error removing network: {e}")
 
-    def display_result(self, result):
-        self.result_text.append(result)
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = DockerGUI()
-    window.show()
-    sys.exit(app.exec_())
