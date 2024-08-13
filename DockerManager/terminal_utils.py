@@ -1,4 +1,3 @@
-# terminal_utils.py
 import subprocess
 import sys
 
@@ -18,6 +17,6 @@ if not terminal_emulator:
 
 def open_terminal_with_command(command):
     try:
-        subprocess.Popen(command, shell=True)
+        subprocess.Popen(f"{terminal_emulator} -e {command}", shell=True)
     except Exception as e:
         print(f"Error occurred while opening terminal: {e}", flush=True)

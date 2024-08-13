@@ -1,9 +1,13 @@
-# resource_monitor.py
 import numpy as np
 import pyqtgraph as pg
 from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import QThread, pyqtSignal
 import docker
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 class ResourceGraphWidget(QWidget):
     def __init__(self, container_name):
@@ -36,26 +40,31 @@ class ResourceGraphWidget(QWidget):
         self.timestamps = []
 
     def update_graph(self, cpu_usage, memory_usage, disk_usage):
-        self.cpu_data.append(cpu_usage)
-        self.memory_data.append(memory_usage)
-        self.disk_data.append(disk_usage)
-        self.timestamps.append(len(self.timestamps) + 1)
+        try:
+            self.cpu_data.append(cpu_usage)
+            self.memory_data.append(memory_usage)
+            self.disk_data.append(disk_usage)
+            self.timestamps.append(len(self.timestamps) + 1)
 
-        self.cpu_curve.setData(self.timestamps, self.cpu_data)
-        self.memory_curve.setData(self.timestamps, self.memory_data)
-        self.disk_curve.setData(self.timestamps, self.disk_data)
+            self.cpu_curve.setData(self.timestamps, self.cpu_data)
+            self.memory_curve.setData(self.timestamps, self.memory_data)
+            self.disk_curve.setData(self.timestamps, self.disk_data)
 
-        self.cpu_plot.setLabel('left', 'CPU Usage (%)')
-        self.cpu_plot.setLabel('bottom', 'Time')
-        self.cpu_plot.addLegend()
+            self.cpu_plot.setLabel('left', 'CPU Usage (%)')
+            self.cpu_plot.setLabel('bottom', 'Time')
+            self.cpu_plot.addLegend()
 
-        self.memory_plot.setLabel('left', 'Memory Usage (MB)')
-        self.memory_plot.setLabel('bottom', 'Time')
-        self.memory_plot.addLegend()
+            self.memory_plot.setLabel('left', 'Memory Usage (MB)')
+            self.memory_plot.setLabel('bottom', 'Time')
+            self.memory_plot.addLegend()
 
-        self.disk_plot.setLabel('left', 'Disk Usage (MB)')
-        self.disk_plot.setLabel('bottom', 'Time')
-        self.disk_plot.addLegend()
+            self.disk_plot.setLabel('left', 'Disk Usage (MB)')
+            self.disk_plot.setLabel('bottom', 'Time')
+            self.disk_plot.addLegend()
+
+            logger.info(f"Updated graphs: CPU Usage={cpu_usage}%, Memory Usage={memory_usage}MB, Disk Usage={disk_usage}MB")
+        except Exception as e:
+            logger.error(f"Error updating graphs: {e}")
 
 class ResourceMonitorThread(QThread):
     update_graph = pyqtSignal(float, float, float)
@@ -63,6 +72,7 @@ class ResourceMonitorThread(QThread):
     def __init__(self, container):
         super().__init__()
         self.container = container
+        self.client = docker.from_env()
 
     def run(self):
         prev_cpu = None
@@ -96,21 +106,42 @@ class ResourceMonitorThread(QThread):
                 prev_system = cpu_system
 
                 memory_usage_bytes = stats.get('memory_stats', {}).get('usage', 0)
-                memory_limit_bytes = stats.get('memory_stats', {}).get('limit', 1)
                 memory_usage_mb = memory_usage_bytes / (1024 * 1024)
                 
                 disk_usage_mb = self.get_disk_usage()
 
                 self.update_graph.emit(cpu_usage, memory_usage_mb, disk_usage_mb)
+                logger.info(f"Container {self.container.name}: CPU={cpu_usage}%, Memory={memory_usage_mb}MB, Disk={disk_usage_mb}MB")
             except KeyError as e:
+                logger.warning(f"KeyError while fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
             except docker.errors.APIError as e:
-                pass
+                logger.error(f"APIError while fetching stats: {e}")
+                self.update_graph.emit(0.0, 0.0, 0.0)
             except Exception as e:
-                pass
+                logger.error(f"Unexpected error while fetching stats: {e}")
+                self.update_graph.emit(0.0, 0.0, 0.0)
 
             self.sleep(1)
 
     def get_disk_usage(self):
-        # Replace this with actual disk usage calculation if needed
-        return np.random.random() * 100
+        try:
+            exec_id = self.client.api.exec_create(self.container.id, ['df', '-h'])
+            output = self.client.api.exec_start(exec_id, stream=False)
+            output = output.decode('utf-8')
+            
+            lines = output.splitlines()
+            if len(lines) > 1:
+                usage_info = lines[1].split()
+                if len(usage_info) >= 5:
+                    used_space = usage_info[2]
+                    logger.info(f"Disk usage: {used_space}")
+                    return float(used_space.replace('G', '').replace('M', ''))  # Simplified, needs proper parsing
+            return 0.0
+        except Exception as e:
+            if "409" in str(e):
+                logger.info(f"Container {self.container.id} is not running!")
+                return 0.0
+            else:
+                logger.error(f"Error occurred while getting disk usage: {e}")
+                return 0.0
