@@ -4,8 +4,8 @@ import logging
 import traceback
 
 # Configure logging
-logging.basicConfig(filename='docker_client.log', level=logging.ERROR,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='event_log.log', level=logging.ERROR,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class DockerClientError(Exception):
     """Custom exception for DockerClient errors."""
