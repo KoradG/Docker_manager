@@ -1,39 +1,34 @@
 import docker
 import os
-import logging
-import traceback
+from logs import Logger
 
-# Configure logging
-logging.basicConfig(filename='event_log.log', level=logging.ERROR,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class DockerClientError(Exception):
     """Custom exception for DockerClient errors."""
     pass
 
-def handle_docker_api_error(func):
-    """Decorator to handle Docker API errors."""
-    def wrapper(self, *args, **kwargs):
-        try:
-            return func(self, *args, **kwargs)
-        except docker.errors.APIError as e:
-            self.log_error(f"Error in {func.__name__}: {e}")
-            raise DockerClientError(f"Error in {func.__name__}.") from e
-    return wrapper
+
 
 class DockerClient:
     def __init__(self):
         try:
             self.client = docker.from_env()
+            self.logs = Logger()
         except Exception as e:
-            self.log_error(f"Error connecting to Docker daemon: {e}")
-            raise DockerClientError("Unable to connect to Docker daemon.")
+            self.logs.log_error(f"Error connecting to Docker daemon: {e}")
+            raise self.logs.DockerClientError("Unable to connect to Docker daemon.")
 
-    def log_error(self, message):
-        logging.error(message)
-        logging.error("Traceback: %s", traceback.format_exc())
 
-    @handle_docker_api_error
+    def handle_docker_api_error(func):
+        """Decorator to handle Docker API errors."""
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except docker.errors.APIError as e:
+                self.log_error(f"Error in {func.__name__}: {e}")
+                raise DockerClientError(f"Error in {func.__name__}.") from e
+        return wrapper
+
     def list_containers(self, all=True):
         return self.client.containers.list(all=all)
 
@@ -46,17 +41,17 @@ class DockerClient:
             for log in build_logs:
                 if 'stream' in log:
                     print(log['stream'], end='', flush=True)
-            print(f"Image built from Dockerfile and tagged as {tag}.", flush=True)
+            self.logs.log_info(f"Image built from Dockerfile and tagged as {tag}.", flush=True)
             return image
         except ValueError as e:
-            self.log_error(f"Invalid Dockerfile path: {e}")
+            self.logs.log_error(f"Invalid Dockerfile path: {e}")
             raise
         except docker.errors.BuildError as e:
-            self.log_error(f"Error building image from Dockerfile: {e}")
-            raise DockerClientError("Error building image from Dockerfile.")
+            self.logs.log_error(f"Error building image from Dockerfile: {e}")
+            raise self.logs.DockerClientError("Error building image from Dockerfile.")
         except docker.errors.APIError as e:
-            self.log_error(f"API Error while building image: {e}")
-            raise DockerClientError("API Error while building image.")
+            self.logs.log_error(f"API Error while building image: {e}")
+            raise self.logs.DockerClientError("API Error while building image.")
 
     @handle_docker_api_error
     def create_container(self, image_name, command=None, env_vars=None, ports=None, volumes=None, network=None, extra_params=None):
@@ -73,6 +68,7 @@ class DockerClient:
         print(f"Container created with image {image_name}.", flush=True)
         return container
 
+
     @handle_docker_api_error
     def perform_container_action(self, container, action_func, action_name):
         action_func()
@@ -87,7 +83,7 @@ class DockerClient:
     @handle_docker_api_error
     def stop_container(self, container):
         return self.perform_container_action(container, container.stop, "stopped")
-
+    
     @handle_docker_api_error
     def pause_container(self, container):
         return self.perform_container_action(container, container.pause, "paused")

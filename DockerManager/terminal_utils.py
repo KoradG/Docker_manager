@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+
 def detect_terminal():
     terminals = ["gnome-terminal", "xterm", "konsole", "lxterminal", "mate-terminal", "terminator"]
     for terminal in terminals:
@@ -20,3 +21,5 @@ def open_terminal_with_command(command):
         subprocess.Popen(f"{terminal_emulator} -e {command}", shell=True)
     except Exception as e:
         print(f"Error occurred while opening terminal: {e}", flush=True)
+
+

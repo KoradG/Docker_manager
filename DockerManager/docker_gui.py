@@ -1,4 +1,4 @@
-import logging
+
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
     QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QFormLayout, 
@@ -10,25 +10,27 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import os
 import yaml
 import subprocess
-import tempfile
+import sys
 
 import docker
 from docker.errors import APIError as DockerAPIError
 
+from logs import Logger
 from docker_client import get_docker_client
 from resource_monitor import ResourceGraphWidget, ResourceMonitorThread
 from terminal_utils import terminal_emulator, open_terminal_with_command
+from swarm import SwarmManager
 
 
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class DockerGui(QWidget):
     def __init__(self):
         super().__init__()
         self.docker_client = docker.from_env() 
+        self.logger = Logger()
+        self.swarm = SwarmManager(self.logger)
 
-            
         # Initialize window attributes
         self.container_window = None
         self.image_window = None
@@ -38,27 +40,10 @@ class DockerGui(QWidget):
         self.monitor_thread = None
         self.service_window = None
 
-        # Initialize logger
-        self.logger = logging.getLogger('docker_gui')
-        self.logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture detailed logs
-
-        file_handler = logging.FileHandler('event_log.log')
-        file_handler.setLevel(logging.ERROR)  # Log errors to the file
-
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)  # Log info and higher to the console
-
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        console_handler.setFormatter(formatter)
-
-        self.logger.addHandler(file_handler)
-        self.logger.addHandler(console_handler)
-
         self.initUi()
 
     def initUi(self):
-        self.setWindowTitle("Docker Management")
+        self.setWindowTitle("Docker Manager")
         self.setGeometry(100, 100, 800, 600)
 
         main_layout = QVBoxLayout()
@@ -76,6 +61,7 @@ class DockerGui(QWidget):
             ("Create Volume", self.create_volume_prompt),
             ("Prune Unused Volumes", self.prune_volumes),
             ("Create Compose File", self.create_compose_form),
+            ("Docker Swarm", self.show_swarm_dialog)
         ]
 
         # Add buttons to the grid layout
@@ -103,25 +89,14 @@ class DockerGui(QWidget):
     def display_result(self, result):
         self.result_text.append(result)
     
-    def log_error(self, message):
-        self.logger.error(message)
-        self.display_result(message)
-
-    def log_info(self, message):
-        self.logger.info(message)
-        self.display_result(message)
-
-    def log_debug(self, message):
-        self.logger.debug(message)
-        self.display_result(message)
 
     def list_containers(self):
         try:
-            self.logger.info("Listing all containers.")
+            self.logger.log_info("Listing all containers.")
             containers = self.docker_client.containers.list(all=True)
             self.show_containers_table(containers)
         except docker.errors.APIError as e:
-            self.log_error(f"Error listing containers: {e}")
+            self.logger.log_error(f"Error listing containers: {e}")
 
     def show_containers_table(self, containers):
         if self.container_window:
@@ -137,7 +112,7 @@ class DockerGui(QWidget):
         table.setColumnCount(13)
         table.setHorizontalHeaderLabels([
             "ID", "Name", "Status", "Start", "Stop", "Pause", "Unpause",
-            "Logs", "Shell", "Remove", "Inspect", "Stats", "Monitor"
+            "logs", "Shell", "Remove", "Inspect", "Stats", "Monitor"
         ])
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
@@ -151,7 +126,7 @@ class DockerGui(QWidget):
                 "Stop": (4, self.stop_container),
                 "Pause": (5, self.pause_container),
                 "Unpause": (6, self.unpause_container),
-                "Logs": (7, self.open_logs),
+                "logs": (7, self.open_log),
                 "Shell": (8, self.open_shell),
                 "Remove": (9, self.remove_container),
                 "Inspect": (10, self.inspect_container),
@@ -170,11 +145,11 @@ class DockerGui(QWidget):
 
     def list_images(self):
         try:
-            self.logger.info("Listing all images.")
+            self.logger.log_info("Listing all images.")
             images = self.docker_client.images.list()
             self.show_images_table(images)
         except docker.errors.APIError as e:
-            self.log_error(f"Error listing images: {e}")
+            self.logger.log_error(f"Error listing images: {e}")
 
     def show_images_table(self, images):
         if self.image_window:
@@ -216,11 +191,11 @@ class DockerGui(QWidget):
 
     def list_networks(self):
         try:
-            self.logger.info("Listing all networks.")
+            self.logger.log_info("Listing all networks.")
             networks = self.docker_client.networks.list()
             self.show_networks_table(networks)
         except docker.errors.APIError as e:
-            self.log_error(f"Error listing networks: {e}")
+            self.logger.log_error(f"Error listing networks: {e}")
 
     def show_networks_table(self, networks):
         if self.network_window:
@@ -259,11 +234,11 @@ class DockerGui(QWidget):
 
     def list_volumes(self):
         try:
-            self.logger.info("Listing all volumes.")
+            self.logger.log_info("Listing all volumes.")
             volumes = self.docker_client.volumes.list()
             self.show_volumes_table(volumes)
         except docker.errors.APIError as e:
-            self.log_error(f"Error listing volumes: {e}")
+            self.logger.log_error(f"Error listing volumes: {e}")
 
     def show_volumes_table(self, volumes):
         if self.volume_window:
@@ -295,16 +270,16 @@ class DockerGui(QWidget):
 
     def prune_volumes(self):
         try:
-            self.logger.info("Pruning unused volumes.")
+            self.logger.log_info("Pruning unused volumes.")
             result = self.docker_client.volumes.prune()
-            self.log_info(f"Pruned volumes: {result}")
+            self.logger.log_info(f"Pruned volumes: {result}")
         except docker.errors.APIError as e:
-            self.log_error(f"Error pruning volumes: {e}")
+            self.logger.log_error(f"Error pruning volumes: {e}")
 
 
     def create_container_prompt(self):
         try:
-            self.logger.info("Prompting user to create a new container.")
+            self.logger.log_info("Prompting user to create a new container.")
 
             # Create the dialog box for multiple inputs
             dialog = QDialog(self)
@@ -361,10 +336,10 @@ class DockerGui(QWidget):
                 if container_name and dockerfile_path:
                     self.create_container_from_dockerfile(container_name, dockerfile_path, flags)
                 else:
-                    self.log_error("Container name and Dockerfile path are required to create a container.")
+                    self.logger.log_error("Container name and Dockerfile path are required to create a container.")
 
         except Exception as e:
-            self.log_error(f"Error creating container: {e}")
+            self.logger.log_error(f"Error creating container: {e}")
 
     def browse_dockerfile(self, dockerfile_input):
         # Open file dialog to select Dockerfile path
@@ -374,7 +349,7 @@ class DockerGui(QWidget):
 
     def create_container_from_dockerfile(self, container_name, dockerfile_path, flags=None):
         try:
-            self.logger.info(f"Building image from Dockerfile at: {dockerfile_path}")
+            self.logger.log_info(f"Building image from Dockerfile at: {dockerfile_path}")
 
             # Extract directory and Dockerfile filename
             dockerfile_dir = os.path.dirname(dockerfile_path)
@@ -386,10 +361,10 @@ class DockerGui(QWidget):
                     path=dockerfile_dir, dockerfile=dockerfile_name, tag=container_name
                 )
                 for log in build_logs:
-                    self.logger.info(log.get("stream", "").strip())  # Log the build output
-                self.logger.info(f"Image '{container_name}' built successfully from Dockerfile.")
+                    self.logger.log_info(log.get("stream", "").strip())  # Log the build output
+                self.logger.log_info(f"Image '{container_name}' built successfully from Dockerfile.")
             except docker.errors.BuildError as e:
-                self.log_error(f"Failed to build image from Dockerfile: {e}")
+                self.logger.log_error(f"Failed to build image from Dockerfile: {e}")
                 return
 
             # Prepare container arguments
@@ -397,35 +372,35 @@ class DockerGui(QWidget):
 
             if flags:
                 # Process flags and add to the arguments as needed
-                self.logger.info(f"Running container with flags: {flags}")
+                self.logger.log_info(f"Running container with flags: {flags}")
                 # Example: split the flags string by spaces
                 flag_list = flags.split()
                 run_args.update({'command': flag_list})
 
             # Run the container from the built image
             self.docker_client.containers.run(container_name, **run_args)
-            self.log_info(f"Container '{container_name}' created successfully.")
+            self.logger.log_info(f"Container '{container_name}' created successfully.")
 
         except docker.errors.APIError as e:
-            self.log_error(f"Error creating container: {e}")
+            self.logger.log_error(f"Error creating container: {e}")
 
 
     def create_container(self, container_name, image_name, dockerfile_path=None, flags=None):
         try:
-            self.logger.info(f"Creating container with name: {container_name} and image: {image_name}")
+            self.logger.log_info(f"Creating container with name: {container_name} and image: {image_name}")
 
             # If a Dockerfile is provided, build the image first
             if dockerfile_path:
-                self.logger.info(f"Building image from Dockerfile at: {dockerfile_path}")
+                self.logger.log_info(f"Building image from Dockerfile at: {dockerfile_path}")
 
                 # Use Docker's SDK to build the image from the Dockerfile
                 try:
-                    image, logs = self.docker_client.images.build(path=dockerfile_path, tag=image_name)
-                    for log in logs:
-                        self.logger.info(log.get("stream", "").strip())  # Log the build output
-                    self.logger.info(f"Image '{image_name}' built successfully from Dockerfile.")
+                    image, self.logger = self.docker_client.images.build(path=dockerfile_path, tag=image_name)
+                    for log in self.logger:
+                        self.logger.log_info(log.get("stream", "").strip())  # Log the build output
+                    self.logger.log_info(f"Image '{image_name}' built successfully from Dockerfile.")
                 except docker.errors.BuildError as e:
-                    self.log_error(f"Failed to build image from Dockerfile: {e}")
+                    self.logger.log_error(f"Failed to build image from Dockerfile: {e}")
                     return
 
             # Prepare container arguments
@@ -433,184 +408,212 @@ class DockerGui(QWidget):
 
             if flags:
                 # Process flags and add to the arguments as needed
-                self.logger.info(f"Running container with flags: {flags}")
+                self.logger.log_info(f"Running container with flags: {flags}")
                 # Example: split the flags string by spaces
                 flag_list = flags.split()
                 run_args.update({'command': flag_list})
 
-            self.log_info(f"Container '{container_name}' created successfully.")
+            self.logger.log_info(f"Container '{container_name}' created successfully.")
 
         except docker.errors.APIError as e:
-            self.log_error(f"Error creating container: {e}")
+            self.logger.log_error(f"Error creating container: {e}")
 
 
     def deploy_compose_prompt(self):
         try:
-            self.logger.info("Prompting user to deploy a Docker Compose file.")
+            self.logger.log_info("Prompting user to deploy a Docker Compose file.")
             file_path, _ = QFileDialog.getOpenFileName(self, "Open Docker Compose File", "", "YAML Files (*.yml *.yaml)")
             if file_path:
                 self.deploy_compose(file_path)
         except Exception as e:
-            self.log_error(f"Error deploying compose file: {e}")
+            self.logger.log_error(f"Error deploying compose file: {e}")
 
     def create_network_prompt(self):
         try:
-            self.logger.info("Prompting user to create a new network.")
+            self.logger.log_info("Prompting user to create a new network.")
             network_name, ok = QInputDialog.getText(self, "Create Network", "Network name:")
             if ok and network_name:
                 self.create_network(network_name)
         except Exception as e:
-            self.log_error(f"Error creating network: {e}")
+            self.logger.log_error(f"Error creating network: {e}")
 
     def create_network(self, network_name):
         try:
-            self.logger.info(f"Creating network with name: {network_name}")
+            self.logger.log_info(f"Creating network with name: {network_name}")
             self.docker_client.networks.create(name=network_name, driver="bridge")
-            self.log_info(f"Network '{network_name}' created successfully.")
+            self.logger.log_info(f"Network '{network_name}' created successfully.")
         except docker.errors.APIError as e:
-            self.log_error(f"Error creating network: {e}")
+            self.logger.log_error(f"Error creating network: {e}")
 
     def create_volume_prompt(self):
         try:
-            self.logger.info("Prompting user to create a new volume.")
+            self.logger.log_info("Prompting user to create a new volume.")
             volume_name, ok = QInputDialog.getText(self, "Create Volume", "Volume name:")
             if ok and volume_name:
                 self.create_volume(volume_name)
         except Exception as e:
-            self.log_error(f"Error creating volume: {e}")
+            self.logger.log_error(f"Error creating volume: {e}")
 
     def create_volume(self, volume_name):
         try:
-            self.logger.info(f"Creating volume with name: {volume_name}")
+            self.logger.log_info(f"Creating volume with name: {volume_name}")
             self.docker_client.volumes.create(name=volume_name)
-            self.log_info(f"Volume '{volume_name}' created successfully.")
+            self.logger.log_info(f"Volume '{volume_name}' created successfully.")
         except docker.errors.APIError as e:
-            self.log_error(f"Error creating volume: {e}")
+            self.logger.log_error(f"Error creating volume: {e}")
 
-    def run_container(self, container):
-        try:
-            container.start()
-            self.log_info(f"Container '{container.id}' started.")
-            self.list_containers() 
-        except docker.errors.APIError as e:
-            self.log_error(f"Error starting container: {e}")
 
     def start_container(self, container):
         try:
             container.start()
-            self.log_info(f"Container '{container.id}' started.")
+            self.logger.log_info(f"Container '{container.id}' started.")
+            self.display_result(f"Container '{container.id}' started.")
             self.list_containers() 
         except docker.errors.APIError as e:
-            self.log_error(f"Error starting container: {e}")
+            self.logger.log_error(f"Error starting container: {e}")
 
     def stop_container(self, container):
         try:
             container.stop()
-            self.log_info(f"Container '{container.id}' stopped.")
+            self.logger.log_info(f"Container '{container.id}' stopped.")
+            self.display_result(f"Container '{container.id}' stopped.")
             self.list_containers() 
         except docker.errors.APIError as e:
-            self.log_error(f"Error stopping container: {e}")
+            self.logger.log_error(f"Error stopping container: {e}")
 
     def pause_container(self, container):
         try:
-            container.pause()
-            self.log_info(f"Container '{container.id}' paused.")
-            self.list_containers() 
+            # Check if the container is already paused or not running
+            if container.status != "running":
+                self.logger.log_info(f"Container '{container.id}' is not running, cannot pause.")
+                self.display_result(f"Container '{container.id}' is not running, cannot pause.")
+                return
+
+            container.pause()  # Attempt to pause the container
+            self.logger.log_info(f"Container '{container.id}' paused.")
+            self.display_result(f"Container '{container.id}' paused.")
+            self.list_containers()
+
         except docker.errors.APIError as e:
-            self.log_error(f"Error pausing container: {e}")
+            # Log the full details of the error
+            self.logger.log_error(f"Error pausing container: {e.explanation}")
+            self.display_result(f"Error pausing container: {e.explanation}")
+
+        except Exception as e:
+            # Catch any other unforeseen errors
+            self.logger.log_error(f"Unexpected error: {e}")
+            self.display_result(f"Unexpected error: {e}")
+
 
     def unpause_container(self, container):
         try:
+            # Check if the container is paused before unpausing
+            if container.status != 'paused':
+                self.logger.log_info(f"Container '{container.id}' is not paused, cannot unpause.")
+                self.display_result(f"Container '{container.id}' is not paused, cannot unpause.")
+                return
+
             container.unpause()
-            self.log_info(f"Container '{container.id}' unpaused.")
-            self.list_containers() 
+            self.logger.log_info(f"Container '{container.id}' unpaused.")
+            self.display_result(f"Container '{container.id}' unpaused.")
+            self.list_containers()
         except docker.errors.APIError as e:
-            self.log_error(f"Error unpausing container: {e}")
+            self.logger.log_error(f"Error unpausing container: {e}")
+
 
     def remove_container(self, container):
         try:
-            self.logger.info(f"Removing container with ID: {container.id}")
+            self.logger.log_info(f"Removing container with ID: {container.id}")
             container.remove(force=True)
-            self.log_info(f"Container '{container.name}' removed successfully.")
+            self.logger.log_info(f"Container '{container.name}' removed successfully.")
+            self.display_result(f"Container '{container.name}' removed successfully.")
             self.list_containers() 
         except docker.errors.APIError as e:
-            self.log_error(f"Error removing container: {e}")
+            self.logger.log_error(f"Error removing container: {e}")
 
 
-    def open_logs(self, container):
+
+    def open_log(self, container):
         try:
-            self.logger.info(f"Opening logs for container with ID: {container.id}")
-            logs = container.logs().decode('utf-8')
-            self.display_result(f"Logs for container {container.id}:\n{logs}")
-        except docker.errors.APIError as e:
-            self.log_error(f"Error opening logs for container: {e}")
+            # Fetch the container self.logger
+            log = container.logs().decode('utf-8')
+            self.display_result(log)
+        except Exception as e:
+            self.logger.log_error(f"Error opening logs for container: {e}", file=sys.stderr)
 
     def open_shell(self, container):
         try:
-            self.logger.info(f"Opening shell for container with ID: {container.id}")
+            self.logger.log_info(f"Opening shell for container with ID: {container.id}")
             command = f"docker exec -it {container.id} /bin/bash"
             open_terminal_with_command(command)
 
         except Exception as e:
-            self.log_error(f"Error opening shell for container: {e}")
+            self.logger.log_error(f"Error opening shell for container: {e}")
 
     def remove_image(self, image):
         try:
-            self.logger.info(f"Removing image with ID: {image.id}")
+            self.logger.log_info(f"Removing image with ID: {image.id}")
+            self.display_result(f"Removing image with ID: {image.id}")
             self.docker_client.images.remove(image.id, force=True)
-            self.log_info(f"Image '{image.id}' removed successfully.")
+            self.logger.log_info(f"Image '{image.id}' removed successfully.")
+            self.display_result(f"Image '{image.id}' removed successfully.")
             self.list_images()
         except docker.errors.APIError as e:
-            self.log_error(f"Error removing image: {e}")
+            self.logger.log_error(f"Error removing image: {e}")
 
     def tag_image(self, image):
         try:
-            self.logger.info(f"Prompting user to tag image with ID: {image.id}")
+            self.logger.log_info(f"Prompting user to tag image with ID: {image.id}")
             tag, ok = QInputDialog.getText(self, "Tag Image", "New tag:")
             if ok and tag:
-                self.logger.info(f"Tagging image with ID: {image.id} with tag: {tag}")
+                self.logger.log_info(f"Tagging image with ID: {image.id} with tag: {tag}")
+                self.display_result(f"Tagging image with ID: {image.id} with tag: {tag}")
                 image.tag(tag)
-                self.log_info(f"Image '{image.id}' tagged with '{tag}' successfully.")
+                self.logger.log_info(f"Image '{image.id}' tagged with '{tag}' successfully.")
+                self.display_result(f"Image '{image.id}' tagged with '{tag}' successfully.")
         except docker.errors.APIError as e:
-            self.log_error(f"Error tagging image: {e}")
+            self.logger.log_error(f"Error tagging image: {e}")
 
     def push_image(self, image):
         try:
-            self.logger.info(f"Prompting user to push image with ID: {image.id}")
+            self.logger.log_info(f"Prompting user to push image with ID: {image.id}")
+            self.display_result(f"Prompting user to push image with ID: {image.id}")
             repository, ok = QInputDialog.getText(self, "Push Image", "Repository:")
             if ok and repository:
-                self.logger.info(f"Pushing image with ID: {image.id} to repository: {repository}")
+                self.logger.log_info(f"Pushing image with ID: {image.id} to repository: {repository}")
+                self.display_result(f"Pushing image with ID: {image.id} to repository: {repository}")
                 self.docker_client.images.push(repository)
-                self.log_info(f"Image '{image.id}' pushed to repository '{repository}' successfully.")
+                self.logger.log_info(f"Image '{image.id}' pushed to repository '{repository}' successfully.")
+                self.display_result(f"Image '{image.id}' pushed to repository '{repository}' successfully.")
         except docker.errors.APIError as e:
-            self.log_error(f"Error pushing image: {e}")
+            self.logger.log_error(f"Error pushing image: {e}")
 
     def pull_image(self, image):
         try:
-            self.logger.info(f"Prompting user to pull image with ID: {image.id}")
+            self.logger.log_info(f"Prompting user to pull image with ID: {image.id}")
             repository, ok = QInputDialog.getText(self, "Pull Image", "Repository:")
             if ok and repository:
-                self.logger.info(f"Pulling image from repository: {repository}")
+                self.logger.log_info(f"Pulling image from repository: {repository}")
                 self.docker_client.images.pull(repository)
-                self.log_info(f"Image pulled from repository '{repository}' successfully.")
+                self.logger.log_info(f"Image pulled from repository '{repository}' successfully.")
         except docker.errors.APIError as e:
-            self.log_error(f"Error pulling image: {e}")
+            self.logger.log_error(f"Error pulling image: {e}")
 
     def inspect_container(self, container):
         try:
-            self.logger.info(f"Inspecting container with ID: {container.id}")
+            self.logger.log_info(f"Inspecting container with ID: {container.id}")
             info = container.attrs
             self.display_result(f"Inspecting container {container.id}:\n{info}")
         except docker.errors.APIError as e:
-            self.log_error(f"Error inspecting container: {e}")
+            self.logger.log_error(f"Error inspecting container: {e}")
 
     def show_stats(self, container):
         try:
-            self.logger.info(f"Showing stats for container with ID: {container.id}")
+            self.logger.log_info(f"Showing stats for container with ID: {container.id}")
             stats = container.stats(stream=False)
             self.display_result(f"Stats for container {container.id}:\n{stats}")
         except docker.errors.APIError as e:
-            self.log_error(f"Error showing stats for container: {e}")
+            self.logger.log_error(f"Error showing stats for container: {e}")
 
 
 
@@ -620,11 +623,11 @@ class DockerGui(QWidget):
 
             # Check if the container is running
             if container.status != 'running':
-                self.logger.error(f"Cannot open resource monitor: Container {container_id} is not running.")
+                self.logger.log_error(f"Cannot open resource monitor: Container {container_id} is not running.")
                 self.display_result(f"Cannot open resource monitor: Container {container_id} is not running.")
                 return
 
-            self.logger.info(f"Opening resource monitor for container: {container_id}")
+            self.logger.log_info(f"Opening resource monitor for container: {container_id}")
 
             if container_id not in self.monitor_windows or not self.monitor_windows[container_id]:
                 monitor_window = QWidget()
@@ -648,57 +651,57 @@ class DockerGui(QWidget):
                 # If the window already exists, bring it to the front
                 self.monitor_windows[container_id][0].show()
         except Exception as e:
-            self.logger.error(f"Error opening resource monitor: {e}")
+            self.logger.log_error(f"Error opening resource monitor: {e}")
 
 
 
     def inspect_network(self, network):
         try:
-            self.logger.info(f"Inspecting network with ID: {network.id}")
+            self.logger.log_info(f"Inspecting network with ID: {network.id}")
             info = network.attrs
             self.display_result(f"Inspecting network {network.id}:\n{info}")
         except docker.errors.APIError as e:
-            self.log_error(f"Error inspecting network: {e}")
+            self.logger.log_error(f"Error inspecting network: {e}")
 
     def remove_network_prompt(self, network):
         try:
-            self.logger.info(f"Prompting user to remove network with ID: {network.id}")
+            self.logger.log_info(f"Prompting user to remove network with ID: {network.id}")
             reply = QMessageBox.question(self, 'Remove Network',
                                          f"Are you sure you want to remove network '{network.name}'?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self.remove_network(network)
         except Exception as e:
-            self.log_error(f"Error prompting network removal: {e}")
+            self.logger.log_error(f"Error prompting network removal: {e}")
 
     def remove_network(self, network):
         try:
-            self.logger.info(f"Removing network with ID: {network.id}")
+            self.logger.log_info(f"Removing network with ID: {network.id}")
             network.remove()
-            self.log_info(f"Network '{network.id}' removed successfully.")
+            self.logger.log_info(f"Network '{network.id}' removed successfully.")
             self.list_networks()
         except docker.errors.APIError as e:
-            self.log_error(f"Error removing network: {e}")
+            self.logger.log_error(f"Error removing network: {e}")
 
     def remove_volume_prompt(self, volume):
         try:
-            self.logger.info(f"Prompting user to remove volume with ID: {volume.id}")
+            self.logger.log_info(f"Prompting user to remove volume with ID: {volume.id}")
             reply = QMessageBox.question(self, 'Remove Volume',
                                          f"Are you sure you want to remove volume '{volume.name}'?",
                                          QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
             if reply == QMessageBox.Yes:
                 self.remove_volume(volume)
         except Exception as e:
-            self.log_error(f"Error prompting volume removal: {e}")
+            self.logger.log_error(f"Error prompting volume removal: {e}")
 
     def remove_volume(self, volume):
         try:
-            self.logger.info(f"Removing volume with ID: {volume.id}")
+            self.logger.log_info(f"Removing volume with ID: {volume.id}")
             self.docker_client.volumes.get(volume.id).remove()
-            self.log_info(f"Volume '{volume.id}' removed successfully.")
+            self.logger.log_info(f"Volume '{volume.id}' removed successfully.")
             self.list_volumes()
         except docker.errors.APIError as e:
-            self.log_error(f"Error removing volume: {e}")
+            self.logger.log_error(f"Error removing volume: {e}")
 
 
     def manage_docker_compose_services(self):
@@ -718,7 +721,7 @@ class DockerGui(QWidget):
             table.setRowCount(len(services))
             table.setColumnCount(5)
             table.setHorizontalHeaderLabels([
-                "Service Name", "Status", "Start", "Stop", "View Logs"
+                "Service Name", "Status", "Start", "Stop", "View self.logger"
             ])
             table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
@@ -739,10 +742,10 @@ class DockerGui(QWidget):
                 stop_button.clicked.connect(lambda _, s=name: self.stop_service(s))
                 table.setCellWidget(row, 3, stop_button)
 
-                # View Logs Button
-                view_logs_button = QPushButton("View Logs")
-                view_logs_button.clicked.connect(lambda _, s=name: self.view_service_logs(s))
-                table.setCellWidget(row, 4, view_logs_button)
+                # View self.logger Button
+                view_self.logger_button = QPushButton("View self.logger")
+                view_self.logger_button.clicked.connect(lambda _, s=name: self.view_service_self.logger(s))
+                table.setCellWidget(row, 4, view_self.logger_button)
 
             # Add table to layout first
             layout.addWidget(table)
@@ -756,48 +759,6 @@ class DockerGui(QWidget):
             self.service_window.setLayout(layout)
         else:
             self.service_window.show()
-
-    def start_service(self, service_name):
-        """
-        Starts the specified Docker Compose service.
-        """
-        try:
-            result = subprocess.run(['docker-compose', 'up', '-d', service_name],
-                                    capture_output=True, text=True, check=True)
-            self.result_text.append(f"Service '{service_name}' started successfully.")
-            self.logger.info(f"Service '{service_name}' started.")
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to start service '{service_name}': {e.stderr}")
-            self.result_text.append(f"Error starting service '{service_name}': {e.stderr}")
-
-    def stop_service(self, service_name):
-        """
-        Stops the specified Docker Compose service.
-        """
-        try:
-            result = subprocess.run(['docker-compose', 'stop', service_name],
-                                    capture_output=True, text=True, check=True)
-            self.result_text.append(f"Service '{service_name}' stopped successfully.")
-            self.logger.info(f"Service '{service_name}' stopped.")
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to stop service '{service_name}': {e.stderr}")
-            self.result_text.append(f"Error stopping service '{service_name}': {e.stderr}")
-
-    def view_service_logs(self, service_name):
-        """
-        Fetches and displays logs for the specified Docker Compose service.
-        """
-        try:
-            result = subprocess.run(['docker-compose', 'logs', service_name],
-                                    capture_output=True, text=True, check=True)
-            self.result_text.setPlainText(f"Logs for service '{service_name}':\n{result.stdout}")
-            self.logger.info(f"Logs for service '{service_name}' retrieved.")
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Failed to fetch logs for service '{service_name}': {e.stderr}")
-            self.result_text.append(f"Error fetching logs for service '{service_name}': {e.stderr}")
-        except Exception as e:
-            self.logger.error(f"Unexpected error while fetching logs: {e}")
-            self.result_text.append(f"Unexpected error: {e}")
 
 
     def create_compose_form(self):
@@ -850,10 +811,16 @@ class DockerGui(QWidget):
         layout.addWidget(QLabel("Restart Policy (e.g., always, on-failure):"))
         layout.addWidget(self.restart_policy_input)
 
-        # **Replicas** input
+        # Replicas input
         self.replicas_input = QLineEdit()
+        self.yaml_output.setReadOnly(True)
         layout.addWidget(QLabel("Replicas (e.g., 1, 3):"))
         layout.addWidget(self.replicas_input)
+
+        # **YAML File Location** input (optional)
+        self.yaml_location_input = QLineEdit()
+        layout.addWidget(QLabel("YAML File Location (optional):"))
+        layout.addWidget(self.yaml_location_input)
 
         # Button to generate YAML
         generate_button = QPushButton("Generate YAML")
@@ -866,67 +833,19 @@ class DockerGui(QWidget):
         layout.addWidget(QLabel("Generated YAML:"))
         layout.addWidget(self.yaml_output)
 
-        # Button to deploy
-        deploy_button = QPushButton("Deploy Compose File")
-        deploy_button.clicked.connect(self.save_and_deploy_yaml)
+        # Button to deploy the generated YAML
+        deploy_button = QPushButton("Deploy Generated YAML")
+        deploy_button.clicked.connect(lambda: self.save_and_deploy_yaml())
         layout.addWidget(deploy_button)
+
+        # Button to import and deploy an existing YAML
+        import_button = QPushButton("Import and Deploy YAML")
+        import_button.clicked.connect(self.import_and_deploy_yaml)
+        layout.addWidget(import_button)
 
         self.compose_window.setLayout(layout)
         self.compose_window.show()
 
-    def generate_full_docker_compose_yaml(self):
-        """
-        Generates a full Docker Compose YAML with all settings from the form and displays it.
-        """
-        # Collect inputs
-        service_name = self.service_name_input.text()
-        image_name = self.image_name_input.text()
-        ports = self.ports_input.text().split(',') if self.ports_input.text() else []
-        env_vars = self.env_input.text().split(',') if self.env_input.text() else []
-        volumes = self.volumes_input.text().split(',') if self.volumes_input.text() else []
-        networks = self.network_input.text() if self.network_input.text() else None
-        command = self.command_input.text() if self.command_input.text() else None
-        restart_policy = self.restart_policy_input.text() if self.restart_policy_input.text() else None
-        replicas = self.replicas_input.text() if self.replicas_input.text() else None
-
-        if not service_name or not image_name:
-            self.yaml_output.setPlainText("Please provide both service name and image name.")
-            return
-
-        # Construct the compose dictionary
-        service_config = {
-            'image': image_name,
-            'ports': ports,
-            'environment': env_vars,
-            'volumes': volumes
-        }
-
-        # Add optional fields
-        if networks:
-            service_config['networks'] = [networks]
-        if command:
-            service_config['command'] = command
-        if restart_policy or replicas:
-            service_config['deploy'] = {}
-            if restart_policy:
-                service_config['deploy']['restart_policy'] = {'condition': restart_policy}
-            if replicas:
-                service_config['deploy']['replicas'] = int(replicas)
-
-        # Compose file structure
-        compose_dict = {
-            'version': '3',
-            'services': {
-                service_name: service_config
-            }
-        }
-
-        # Convert the dictionary to YAML format
-        yaml_str = yaml.dump(compose_dict, default_flow_style=False)
-        self.yaml_output.setPlainText(yaml_str)
-
-        # Store the YAML for deployment
-        self.generated_yaml = yaml_str
 
     def save_and_deploy_yaml(self):
         """
@@ -934,7 +853,7 @@ class DockerGui(QWidget):
         """
         # Open file dialog to save the YAML
         file_path, _ = QFileDialog.getSaveFileName(self.compose_window, "Save Compose File", "", "YAML Files (*.yaml)")
-        
+
         if file_path:
             try:
                 # Save the generated YAML to the selected file
@@ -947,16 +866,220 @@ class DockerGui(QWidget):
                 self.yaml_output.setPlainText(f"Error saving or deploying Docker Compose file: {str(e)}")
 
 
+    def import_and_deploy_yaml(self):
+        """
+        Opens a file dialog to select a YAML file and deploys it using Docker Compose.
+        """
+        # Open file dialog to select a YAML file
+        file_path, _ = QFileDialog.getOpenFileName(self.compose_window, "Import Compose File", "", "YAML Files (*.yaml)")
+
+        if file_path:
+            try:
+                # Deploy the selected YAML file
+                self.deploy_compose(file_path)
+            except Exception as e:
+                self.yaml_output.setPlainText(f"Error importing or deploying Docker Compose file: {str(e)}")
+
+
     def deploy_compose(self, file_path):
         """
         Deploys the provided Docker Compose YAML file.
         """
         try:
-            self.logger.info(f"Deploying Docker Compose file: {file_path}")
+            self.logger.log_info(f"Deploying Docker Compose file: {file_path}")
             result = subprocess.run(["docker-compose", "-f", file_path, "up", "-d"], capture_output=True, text=True)
             if result.returncode == 0:
-                self.log_info(f"Successfully deployed Docker Compose file: {file_path}")
+                self.logger.log_info(f"Successfully deployed Docker Compose file: {file_path}")
             else:
-                self.log_error(f"Failed to deploy Docker Compose file: {result.stderr}")
+                self.logger.log_error(f"Failed to deploy Docker Compose file: {result.stderr}")
         except subprocess.CalledProcessError as e:
-            self.log_error(f"Error deploying Docker Compose file: {e}")
+            self.logger.log_error(f"Error deploying Docker Compose file: {e}")
+
+
+    def generate_full_docker_compose_yaml(self):
+            """
+            Generates a full Docker Compose YAML with all settings from the form and displays it.
+            """
+            # Collect inputs
+            service_name = self.service_name_input.text()
+            image_name = self.image_name_input.text()
+            ports = self.ports_input.text().split(',') if self.ports_input.text() else []
+            env_vars = self.env_input.text().split(',') if self.env_input.text() else []
+            volumes = self.volumes_input.text().split(',') if self.volumes_input.text() else []
+            networks = self.network_input.text() if self.network_input.text() else None
+            command = self.command_input.text() if self.command_input.text() else None
+            restart_policy = self.restart_policy_input.text() if self.restart_policy_input.text() else None
+            replicas = self.replicas_input.text() if self.replicas_input.text() else None
+
+            if not service_name or not image_name:
+                self.yaml_output.setPlainText("Please provide both service name and image name.")
+                return
+
+            # Construct the compose dictionary
+            service_config = {
+                'image': image_name,
+                'ports': ports,
+                'environment': env_vars,
+                'volumes': volumes
+            }
+
+            # Add optional fields
+            if networks:
+                service_config['networks'] = [networks]
+            if command:
+                service_config['command'] = command
+            if restart_policy or replicas:
+                service_config['deploy'] = {}
+                if restart_policy:
+                    service_config['deploy']['restart_policy'] = {'condition': restart_policy}
+                if replicas:
+                    service_config['deploy']['replicas'] = int(replicas)
+
+            # Compose file structure
+            compose_dict = {
+                'version': '3',
+                'services': {
+                    service_name: service_config
+                }
+            }
+
+            # Convert the dictionary to YAML format
+            yaml_str = yaml.dump(compose_dict, default_flow_style=False)
+            self.yaml_output.setPlainText(yaml_str)
+
+            # Store the YAML for deployment
+            self.generated_yaml = yaml_str
+
+    def show_swarm_dialog(self):
+        """
+        Show the Docker Swarm dialog.
+        """
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Docker Swarm")
+
+        layout = QVBoxLayout(dialog)
+
+        # Initialize Swarm button
+        init_swarm_button = QPushButton("Initialize Swarm", dialog)
+        init_swarm_button.clicked.connect(self.initialize_swarm)
+        layout.addWidget(init_swarm_button)
+
+        # Deploy Service button
+        deploy_service_button = QPushButton("Deploy Service", dialog)
+        deploy_service_button.clicked.connect(self.deploy_service_prompt)
+        layout.addWidget(deploy_service_button)
+
+        # Scale Service button
+        scale_service_button = QPushButton("Scale Service", dialog)
+        scale_service_button.clicked.connect(self.scale_service_prompt)
+        layout.addWidget(scale_service_button)
+
+        # View Nodes button
+        view_nodes_button = QPushButton("View Nodes", dialog)
+        view_nodes_button.clicked.connect(self.view_nodes)
+        layout.addWidget(view_nodes_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def initialize_swarm(self):
+        """
+        Initialize Docker Swarm.
+        """
+        result = self.swarm.initialize_swarm()
+        self.display_result(result)
+
+    def deploy_service_prompt(self):
+        """
+        Show the dialog to deploy a Docker service.
+        """
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Deploy Service")
+        layout = QVBoxLayout(dialog)
+        
+        # Service Name Input
+        service_name_label = QLabel("Service Name:")
+        service_name_input = QLineEdit(dialog)
+        layout.addWidget(service_name_label)
+        layout.addWidget(service_name_input)
+
+        # Image Name Input
+        image_name_label = QLabel("Image Name:")
+        image_name_input = QLineEdit(dialog)
+        layout.addWidget(image_name_label)
+        layout.addWidget(image_name_input)
+
+        # OK and Cancel buttons
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("Deploy", dialog)
+        cancel_button = QPushButton("Cancel", dialog)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addLayout(button_layout)
+
+        ok_button.clicked.connect(lambda: self.deploy_service(service_name_input.text(), image_name_input.text(), dialog))
+        cancel_button.clicked.connect(dialog.reject)
+
+        dialog.exec_()
+
+    def deploy_service(self, service_name, image_name, dialog):
+        """
+        Deploy a Docker service.
+        """
+        result = self.swarm.deploy_service(service_name, image_name)
+        self.display_result(result)
+        if "Error" not in result:
+            dialog.accept()
+        else:
+            dialog.reject()
+
+    def scale_service_prompt(self):
+        """
+        Show the dialog to scale a Docker service.
+        """
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Scale Service")
+        layout = QVBoxLayout(dialog)
+        
+        # Service Name Input
+        service_name_label = QLabel("Service Name:")
+        service_name_input = QLineEdit(dialog)
+        layout.addWidget(service_name_label)
+        layout.addWidget(service_name_input)
+
+        # Replicas Input
+        replicas_label = QLabel("Number of Replicas:")
+        replicas_input = QLineEdit(dialog)
+        layout.addWidget(replicas_label)
+        layout.addWidget(replicas_input)
+
+        # OK and Cancel buttons
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("Scale", dialog)
+        cancel_button = QPushButton("Cancel", dialog)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        layout.addLayout(button_layout)
+
+        ok_button.clicked.connect(lambda: self.scale_service(service_name_input.text(), replicas_input.text(), dialog))
+        cancel_button.clicked.connect(dialog.reject)
+
+        dialog.exec_()
+
+    def scale_service(self, service_name, replicas, dialog):
+        """
+        Scale a Docker service.
+        """
+        result = self.swarm.scale_service(service_name, replicas)
+        self.display_result(result)
+        if "Error" not in result:
+            dialog.accept()
+        else:
+            dialog.reject()
+
+    def view_nodes(self):
+        """
+        View the nodes in Docker Swarm.
+        """
+        result = self.swarm.view_nodes()
+        self.display_result(result)
