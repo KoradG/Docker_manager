@@ -39,6 +39,7 @@ class DockerGui(QWidget):
         self.monitor_windows = {}
         self.monitor_thread = None
         self.service_window = None
+        self.yaml_output = None
 
         self.initUi()
 
@@ -535,11 +536,20 @@ class DockerGui(QWidget):
 
     def open_log(self, container):
         try:
-            # Fetch the container self.logger
-            log = container.logs().decode('utf-8')
-            self.display_result(log)
+            # Fetch container logs, stream if needed
+            log = container.logs(stream=False).decode('utf-8')
+
+            # Display the fetched logs in the UI
+            if log:
+                self.display_result(log)
+            else:
+                self.logger.log_info(f"No logs available for container '{container.name}'.")
+
+        except docker.errors.APIError as e:
+            self.logger.log_error(f"APIError fetching logs for container '{container.name}': {e}")
         except Exception as e:
-            self.logger.log_error(f"Error opening logs for container: {e}", file=sys.stderr)
+            self.logger.log_error(f"Unexpected error fetching logs for container '{container.name}': {e}")
+
 
     def open_shell(self, container):
         try:
@@ -813,11 +823,10 @@ class DockerGui(QWidget):
 
         # Replicas input
         self.replicas_input = QLineEdit()
-        self.yaml_output.setReadOnly(True)
         layout.addWidget(QLabel("Replicas (e.g., 1, 3):"))
         layout.addWidget(self.replicas_input)
 
-        # **YAML File Location** input (optional)
+        # YAML File Location input (optional)
         self.yaml_location_input = QLineEdit()
         layout.addWidget(QLabel("YAML File Location (optional):"))
         layout.addWidget(self.yaml_location_input)
@@ -828,7 +837,7 @@ class DockerGui(QWidget):
         layout.addWidget(generate_button)
 
         # Output area for YAML preview
-        self.yaml_output = QTextEdit()
+        self.yaml_output = QTextEdit()  # Initialize QTextEdit
         self.yaml_output.setReadOnly(True)
         layout.addWidget(QLabel("Generated YAML:"))
         layout.addWidget(self.yaml_output)

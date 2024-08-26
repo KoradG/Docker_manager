@@ -80,6 +80,14 @@ class ResourceMonitorThread(QThread):
 
         while True:
             try:
+                # Check if the container is running
+                container_state = self.container.attrs['State']['Status']
+                if container_state != 'running':
+                    logger.info(f"Container {self.container.name} is not running. Skipping stats collection.")
+                    self.update_graph.emit(0.0, 0.0, 0.0)
+                    self.sleep(1)
+                    continue  # Skip this iteration if the container is not running
+
                 stats = self.container.stats(stream=False)
                 cpu_stats = stats.get('cpu_stats', {})
                 precpu_stats = stats.get('precpu_stats', cpu_stats)
@@ -111,7 +119,6 @@ class ResourceMonitorThread(QThread):
                 disk_usage_mb = self.get_disk_usage()
 
                 self.update_graph.emit(cpu_usage, memory_usage_mb, disk_usage_mb)
-                logger.info(f"Container {self.container.name}: CPU={cpu_usage}%, Memory={memory_usage_mb}MB, Disk={disk_usage_mb}MB")
             except KeyError as e:
                 logger.warning(f"KeyError while fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
