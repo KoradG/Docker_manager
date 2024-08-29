@@ -4,6 +4,8 @@
 
 The Docker Manager is a desktop application developed to facilitate Docker container management through a user-friendly graphical interface. By leveraging PyQt5 for the GUI and Docker's Python SDK for backend operations, the application provides a streamlined approach to handling Docker environments. This tool simplifies Docker management by abstracting complex command-line operations into a graphical interface, making it accessible to users of varying expertise.
 
+Run the application with `main.py`.
+
 ### Key Objectives
 
 The application aims to:

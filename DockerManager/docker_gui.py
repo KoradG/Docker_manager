@@ -1,16 +1,16 @@
 
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
-    QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, QFormLayout, 
-    QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox, QVBoxLayout, QHBoxLayout, QBoxLayout,
-     QWidget, QVBoxLayout, QPushButton, QTextEdit, QGridLayout
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
+    QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, 
+    QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox, QVBoxLayout, QHBoxLayout,
+    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame
 )
 
-from PyQt5.QtCore import QThread, pyqtSignal
 import os
 import yaml
 import subprocess
-import sys
+import time
+import threading
 
 import docker
 from docker.errors import APIError as DockerAPIError
@@ -48,48 +48,129 @@ class DockerGui(QWidget):
         self.setGeometry(100, 100, 800, 600)
 
         main_layout = QVBoxLayout()
-        
-        # Create layout for action buttons
-        button_layout = QGridLayout()
-        
-        buttons = [
-            ("List Containers", self.list_containers),
-            ("Create Container", self.create_container_prompt),
-            ("List Images", self.list_images),
-            ("List Networks", self.list_networks),
-            ("List Volumes", self.list_volumes),
-            ("Create Network", self.create_network_prompt),
-            ("Create Volume", self.create_volume_prompt),
-            ("Prune Unused Volumes", self.prune_volumes),
-            ("Create Compose File", self.create_compose_form),
-            ("Docker Swarm", self.show_swarm_dialog)
-        ]
 
-        # Add buttons to the grid layout
-        row = 0
-        col = 0
-        for text, func in buttons:
-            button = QPushButton(text, self)
-            button.clicked.connect(func)
-            button_layout.addWidget(button, row, col)
-            col += 1
-            if col > 2:  # Number of columns before wrapping to the next row
-                col = 0
-                row += 1
-        
-        # Add the button layout to the main layout
-        main_layout.addLayout(button_layout)
-        
+        # Create a horizontal layout for the section buttons
+        section_button_layout = QHBoxLayout()
+
+        # Create frames for each section, which will be collapsible
+        container_frame = QFrame()
+        container_frame.setFrameShape(QFrame.StyledPanel)
+        container_frame.setVisible(False)  # Initially collapsed
+
+        volume_frame = QFrame()
+        volume_frame.setFrameShape(QFrame.StyledPanel)
+        volume_frame.setVisible(False)  # Initially collapsed
+
+        network_frame = QFrame()
+        network_frame.setFrameShape(QFrame.StyledPanel)
+        network_frame.setVisible(False)  # Initially collapsed
+
+        other_frame = QFrame()
+        other_frame.setFrameShape(QFrame.StyledPanel)
+        other_frame.setVisible(False)  # Initially collapsed
+
+        # Add buttons to control the visibility of each section
+        container_button = QPushButton("Container Actions", self)
+        container_button.setCheckable(True)
+        container_button.clicked.connect(lambda: self.toggle_frame(container_frame, container_button))
+
+        volume_button = QPushButton("Volume Actions", self)
+        volume_button.setCheckable(True)
+        volume_button.clicked.connect(lambda: self.toggle_frame(volume_frame, volume_button))
+
+        network_button = QPushButton("Network Actions", self)
+        network_button.setCheckable(True)
+        network_button.clicked.connect(lambda: self.toggle_frame(network_frame, network_button))
+
+        other_button = QPushButton("Other Actions", self)
+        other_button.setCheckable(True)
+        other_button.clicked.connect(lambda: self.toggle_frame(other_frame, other_button))
+
+        # Add the buttons to the horizontal layout
+        section_button_layout.addWidget(container_button)
+        section_button_layout.addWidget(volume_button)
+        section_button_layout.addWidget(network_button)
+        section_button_layout.addWidget(other_button)
+
+        # Add the horizontal layout to the main layout
+        main_layout.addLayout(section_button_layout)
+
+        # Populate the frames with their respective buttons and layouts
+        self.populate_container_frame(container_frame)
+        self.populate_volume_frame(volume_frame)
+        self.populate_network_frame(network_frame)
+        self.populate_other_frame(other_frame)
+
+        # Add the frames to the main layout
+        main_layout.addWidget(container_frame)
+        main_layout.addWidget(volume_frame)
+        main_layout.addWidget(network_frame)
+        main_layout.addWidget(other_frame)
+
         # Add QTextEdit for output messages
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
         main_layout.addWidget(self.result_text)
-        
+
         self.setLayout(main_layout)
+
+    def toggle_frame(self, frame, button):
+        frame.setVisible(not frame.isVisible())
+        button.setChecked(frame.isVisible())
+
+    def populate_container_frame(self, frame):
+        layout = QVBoxLayout()
+        container_buttons = [
+            ("List Containers", self.list_containers),
+            ("Create Container", self.create_container_prompt),
+            ("List Images", self.list_images),
+        ]
+        for text, func in container_buttons:
+            button = QPushButton(text, self)
+            button.clicked.connect(func)
+            layout.addWidget(button)
+        frame.setLayout(layout)
+
+    def populate_volume_frame(self, frame):
+        layout = QVBoxLayout()
+        volume_buttons = [
+            ("List Volumes", self.list_volumes),
+            ("Create Volume", self.create_volume_prompt),
+            ("Prune Unused Volumes", self.prune_volumes),
+        ]
+        for text, func in volume_buttons:
+            button = QPushButton(text, self)
+            button.clicked.connect(func)
+            layout.addWidget(button)
+        frame.setLayout(layout)
+
+    def populate_network_frame(self, frame):
+        layout = QVBoxLayout()
+        network_buttons = [
+            ("List Networks", self.list_networks),
+            ("Create Network", self.create_network_prompt),
+        ]
+        for text, func in network_buttons:
+            button = QPushButton(text, self)
+            button.clicked.connect(func)
+            layout.addWidget(button)
+        frame.setLayout(layout)
+
+    def populate_other_frame(self, frame):
+        layout = QVBoxLayout()
+        other_buttons = [
+            ("Create Compose File", self.create_compose_form),
+            ("Docker Swarm", self.show_swarm_dialog),
+        ]
+        for text, func in other_buttons:
+            button = QPushButton(text, self)
+            button.clicked.connect(func)
+            layout.addWidget(button)
+        frame.setLayout(layout)    
+
 
     def display_result(self, result):
         self.result_text.append(result)
-    
 
     def list_containers(self):
         try:
@@ -624,8 +705,6 @@ class DockerGui(QWidget):
             self.display_result(f"Stats for container {container.id}:\n{stats}")
         except docker.errors.APIError as e:
             self.logger.log_error(f"Error showing stats for container: {e}")
-
-
 
     def open_monitor(self, container):
         try:

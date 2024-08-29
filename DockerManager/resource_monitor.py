@@ -6,8 +6,11 @@ import docker
 import logging
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+
+logging.basicConfig(filename='monitor_log.log', level=logging.DEBUG,
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
 
 class ResourceGraphWidget(QWidget):
     def __init__(self, container_name):
@@ -62,7 +65,7 @@ class ResourceGraphWidget(QWidget):
             self.disk_plot.setLabel('bottom', 'Time')
             self.disk_plot.addLegend()
 
-            logger.info(f"Updated graphs: CPU Usage={cpu_usage}%, Memory Usage={memory_usage}MB, Disk Usage={disk_usage}MB")
+           # logger.info(f"Updated graphs: CPU Usage={cpu_usage}%, Memory Usage={memory_usage}MB, Disk Usage={disk_usage}MB")
         except Exception as e:
             logger.error(f"Error updating graphs: {e}")
 
@@ -86,8 +89,8 @@ class ResourceMonitorThread(QThread):
                     logger.info(f"Container {self.container.name} is not running. Skipping stats collection.")
                     self.update_graph.emit(0.0, 0.0, 0.0)
                     self.sleep(1)
-                    continue  # Skip this iteration if the container is not running
-
+                    break
+                
                 stats = self.container.stats(stream=False)
                 cpu_stats = stats.get('cpu_stats', {})
                 precpu_stats = stats.get('precpu_stats', cpu_stats)
@@ -142,7 +145,7 @@ class ResourceMonitorThread(QThread):
                 usage_info = lines[1].split()
                 if len(usage_info) >= 5:
                     used_space = usage_info[2]
-                    logger.info(f"Disk usage: {used_space}")
+                    #logger.info(f"Disk usage: {used_space}")
                     return float(used_space.replace('G', '').replace('M', ''))  # Simplified, needs proper parsing
             return 0.0
         except Exception as e:
