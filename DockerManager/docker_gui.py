@@ -3,15 +3,13 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
     QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, 
     QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox, QVBoxLayout, QHBoxLayout,
-    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame
+    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame, QShortcut, QDialogButtonBox
 )
+from PyQt5.QtGui import QKeySequence
 
 import os
 import yaml
 import subprocess
-import time
-import threading
-
 import docker
 from docker.errors import APIError as DockerAPIError
 
@@ -21,6 +19,28 @@ from resource_monitor import ResourceGraphWidget, ResourceMonitorThread
 from terminal_utils import terminal_emulator, open_terminal_with_command
 from swarm import SwarmManager
 
+
+
+class HelpDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Help")
+        self.setGeometry(150, 150, 400, 300)
+
+        layout = QVBoxLayout()
+
+        help_text = QLabel("Shortcut Keys:\n"
+                           "Ctrl+1: Toggle Container Actions\n"
+                           "Ctrl+2: Toggle Volume Actions\n"
+                           "Ctrl+3: Toggle Network Actions\n"
+                           "Ctrl+4: Toggle Other Actions\n")
+
+        layout.addWidget(help_text)
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
+
+        self.setLayout(layout)
 
 
 
@@ -53,66 +73,92 @@ class DockerGui(QWidget):
         section_button_layout = QHBoxLayout()
 
         # Create frames for each section, which will be collapsible
-        container_frame = QFrame()
-        container_frame.setFrameShape(QFrame.StyledPanel)
-        container_frame.setVisible(False)  # Initially collapsed
+        self.container_frame = QFrame()
+        self.container_frame.setFrameShape(QFrame.StyledPanel)
+        self.container_frame.setVisible(False)  # Initially collapsed
 
-        volume_frame = QFrame()
-        volume_frame.setFrameShape(QFrame.StyledPanel)
-        volume_frame.setVisible(False)  # Initially collapsed
+        self.volume_frame = QFrame()
+        self.volume_frame.setFrameShape(QFrame.StyledPanel)
+        self.volume_frame.setVisible(False)  # Initially collapsed
 
-        network_frame = QFrame()
-        network_frame.setFrameShape(QFrame.StyledPanel)
-        network_frame.setVisible(False)  # Initially collapsed
+        self.network_frame = QFrame()
+        self.network_frame.setFrameShape(QFrame.StyledPanel)
+        self.network_frame.setVisible(False)  # Initially collapsed
 
-        other_frame = QFrame()
-        other_frame.setFrameShape(QFrame.StyledPanel)
-        other_frame.setVisible(False)  # Initially collapsed
+        self.other_frame = QFrame()
+        self.other_frame.setFrameShape(QFrame.StyledPanel)
+        self.other_frame.setVisible(False)  # Initially collapsed
 
         # Add buttons to control the visibility of each section
-        container_button = QPushButton("Container Actions", self)
-        container_button.setCheckable(True)
-        container_button.clicked.connect(lambda: self.toggle_frame(container_frame, container_button))
+        self.container_button = QPushButton("Container Actions", self)
+        self.container_button.setCheckable(True)
+        self.container_button.clicked.connect(lambda: self.toggle_frame(self.container_frame, self.container_button))
 
-        volume_button = QPushButton("Volume Actions", self)
-        volume_button.setCheckable(True)
-        volume_button.clicked.connect(lambda: self.toggle_frame(volume_frame, volume_button))
+        self.volume_button = QPushButton("Volume Actions", self)
+        self.volume_button.setCheckable(True)
+        self.volume_button.clicked.connect(lambda: self.toggle_frame(self.volume_frame, self.volume_button))
 
-        network_button = QPushButton("Network Actions", self)
-        network_button.setCheckable(True)
-        network_button.clicked.connect(lambda: self.toggle_frame(network_frame, network_button))
+        self.network_button = QPushButton("Network Actions", self)
+        self.network_button.setCheckable(True)
+        self.network_button.clicked.connect(lambda: self.toggle_frame(self.network_frame, self.network_button))
 
-        other_button = QPushButton("Other Actions", self)
-        other_button.setCheckable(True)
-        other_button.clicked.connect(lambda: self.toggle_frame(other_frame, other_button))
+        self.other_button = QPushButton("Other Actions", self)
+        self.other_button.setCheckable(True)
+        self.other_button.clicked.connect(lambda: self.toggle_frame(self.other_frame, self.other_button))
 
         # Add the buttons to the horizontal layout
-        section_button_layout.addWidget(container_button)
-        section_button_layout.addWidget(volume_button)
-        section_button_layout.addWidget(network_button)
-        section_button_layout.addWidget(other_button)
+        section_button_layout.addWidget(self.container_button)
+        section_button_layout.addWidget(self.volume_button)
+        section_button_layout.addWidget(self.network_button)
+        section_button_layout.addWidget(self.other_button)
 
         # Add the horizontal layout to the main layout
         main_layout.addLayout(section_button_layout)
 
         # Populate the frames with their respective buttons and layouts
-        self.populate_container_frame(container_frame)
-        self.populate_volume_frame(volume_frame)
-        self.populate_network_frame(network_frame)
-        self.populate_other_frame(other_frame)
+        self.populate_container_frame(self.container_frame)
+        self.populate_volume_frame(self.volume_frame)
+        self.populate_network_frame(self.network_frame)
+        self.populate_other_frame(self.other_frame)
 
         # Add the frames to the main layout
-        main_layout.addWidget(container_frame)
-        main_layout.addWidget(volume_frame)
-        main_layout.addWidget(network_frame)
-        main_layout.addWidget(other_frame)
+        main_layout.addWidget(self.container_frame)
+        main_layout.addWidget(self.volume_frame)
+        main_layout.addWidget(self.network_frame)
+        main_layout.addWidget(self.other_frame)
 
         # Add QTextEdit for output messages
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
         main_layout.addWidget(self.result_text)
 
+        # Add Help button to the bottom right
+        self.help_button = QPushButton("Help", self)
+        self.help_button.clicked.connect(self.show_help_dialog)
+        main_layout.addWidget(self.help_button)
+        self.help_button.setFixedSize(100, 30)  # Set size if desired
+
+        # Make sure the Help button is aligned to the bottom right
+        help_button_layout = QHBoxLayout()
+        help_button_layout.addStretch()
+        help_button_layout.addWidget(self.help_button)
+        main_layout.addLayout(help_button_layout)
+
         self.setLayout(main_layout)
+
+        # Add hotkeys for existing buttons
+        self.add_shortcuts()
+
+    def add_shortcuts(self):
+        # Define and add hotkeys for existing buttons
+        QShortcut(QKeySequence("Ctrl+1"), self).activated.connect(lambda: self.container_button.click())
+        QShortcut(QKeySequence("Ctrl+2"), self).activated.connect(lambda: self.volume_button.click())
+        QShortcut(QKeySequence("Ctrl+3"), self).activated.connect(lambda: self.network_button.click())
+        QShortcut(QKeySequence("Ctrl+4"), self).activated.connect(lambda: self.other_button.click())
+
+    def show_help_dialog(self):
+        help_dialog = HelpDialog(self)
+        help_dialog.exec_()
 
     def toggle_frame(self, frame, button):
         frame.setVisible(not frame.isVisible())
@@ -180,6 +226,7 @@ class DockerGui(QWidget):
         except docker.errors.APIError as e:
             self.logger.log_error(f"Error listing containers: {e}")
 
+
     def show_containers_table(self, containers):
         if self.container_window:
             self.container_window.close()
@@ -196,7 +243,23 @@ class DockerGui(QWidget):
             "ID", "Name", "Status", "Start", "Stop", "Pause", "Unpause",
             "logs", "Shell", "Remove", "Inspect", "Stats", "Monitor"
         ])
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        header = table.horizontalHeader()
+
+        # Set the resize mode for each column
+        for i in range(13):
+            if i in [0, 1, 2]:  # Columns that should fit their content
+                header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
+            else:  # Columns that should stretch
+                header.setSectionResizeMode(i, QHeaderView.Stretch)
+
+        # Ensure columns can be resized interactively
+        header.setSectionResizeMode(QHeaderView.Interactive)
+
+        # Optional: Set minimum widths for better readability
+        table.setColumnWidth(0, 100)  # ID column width
+        table.setColumnWidth(1, 150)  # Name column width
+        table.setColumnWidth(2, 150)  # Status column width
 
         for row, container in enumerate(containers):
             table.setItem(row, 0, QTableWidgetItem(container.id))
