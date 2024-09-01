@@ -3,10 +3,11 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
     QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, 
     QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox, QVBoxLayout, QHBoxLayout,
-    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame, QShortcut, QDialogButtonBox
+    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame, QShortcut, QDialogButtonBox,
+    QProgressBar, QProgressDialog
 )
 from PyQt5.QtGui import QKeySequence
-
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import os
 import yaml
 import subprocess
@@ -30,7 +31,7 @@ class HelpDialog(QDialog):
         layout = QVBoxLayout()
 
         help_text = QLabel("Shortcut Keys:\n"
-                           "Ctrl+1: Toggle Container Actions\n"
+                           "Ctrl+1: Toggle Image Actions\n"
                            "Ctrl+2: Toggle Volume Actions\n"
                            "Ctrl+3: Toggle Network Actions\n"
                            "Ctrl+4: Toggle Other Actions\n")
@@ -41,6 +42,28 @@ class HelpDialog(QDialog):
         layout.addWidget(button_box)
 
         self.setLayout(layout)
+
+
+
+class PullImageThread(QThread):
+    progress = pyqtSignal(str)  # Signal to update progress
+
+    def __init__(self, client, repository):
+        super().__init__()
+        self.client = client
+        self.repository = repository
+
+    def run(self):
+        try:
+            self.progress.emit("Starting pull...")
+            for chunk in self.client.api.pull(self.repository, stream=True, decode=True):
+                if 'status' in chunk:
+                    self.progress.emit(chunk['status'])
+            self.progress.emit("Pull complete!")
+        except docker.errors.APIError as e:
+            self.progress.emit(f"API error: {e}")
+        except Exception as e:
+            self.progress.emit(f"Unexpected error: {e}")
 
 
 
@@ -69,6 +92,13 @@ class DockerGui(QWidget):
 
         main_layout = QVBoxLayout()
 
+        # Create status label and progress bar
+        self.status_label = QLabel("Status: Ready")
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+    
+
         # Create a horizontal layout for the section buttons
         section_button_layout = QHBoxLayout()
 
@@ -90,7 +120,7 @@ class DockerGui(QWidget):
         self.other_frame.setVisible(False)  # Initially collapsed
 
         # Add buttons to control the visibility of each section
-        self.container_button = QPushButton("Container Actions", self)
+        self.container_button = QPushButton("Image Actions", self)
         self.container_button.setCheckable(True)
         self.container_button.clicked.connect(lambda: self.toggle_frame(self.container_frame, self.container_button))
 
@@ -170,6 +200,7 @@ class DockerGui(QWidget):
             ("List Containers", self.list_containers),
             ("Create Container", self.create_container_prompt),
             ("List Images", self.list_images),
+            ("Pull Image", self.pull_image),
         ]
         for text, func in container_buttons:
             button = QPushButton(text, self)
@@ -307,32 +338,83 @@ class DockerGui(QWidget):
         layout = QVBoxLayout()
         table = QTableWidget()
         table.setRowCount(len(images))
-        table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(["ID", "Tags", "Remove", "Tag", "Push", "Pull"])
+        table.setColumnCount(7)  # Adjusted to 7 columns
+        table.setHorizontalHeaderLabels(["ID", "Tags", "Remove", "Tag", "Push", "Run", "Stop"])  # Updated header labels
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
         for row, img in enumerate(images):
             image_id = img.id
             tags = img.tags if img.tags else []
 
-            table.setItem(row, 0, QTableWidgetItem(image_id))
-            table.setItem(row, 1, QTableWidgetItem(", ".join(tags)))
+            table.setItem(row, 0, QTableWidgetItem(image_id))  # ID
+            table.setItem(row, 1, QTableWidgetItem(", ".join(tags)))  # Tags
 
-            buttons = {
-                "Remove": (2, self.remove_image),
-                "Tag": (3, self.tag_image),
-                "Push": (4, self.push_image),
-                "Pull": (5, self.pull_image)
-            }
+            # Create and add buttons
+            remove_button = QPushButton("Remove")
+            remove_button.clicked.connect(lambda _, i=img: self.remove_image(i))
+            table.setCellWidget(row, 2, remove_button)  # Remove
 
-            for text, (col, action) in buttons.items():
-                button = QPushButton(text)
-                button.clicked.connect(lambda _, i=img, a=action: a(i))
-                table.setCellWidget(row, col, button)
+            tag_button = QPushButton("Tag")
+            tag_button.clicked.connect(lambda _, i=img: self.tag_image(i))
+            table.setCellWidget(row, 3, tag_button)  # Tag
+
+            push_button = QPushButton("Push")
+            push_button.clicked.connect(lambda _, i=img: self.push_image(i))
+            table.setCellWidget(row, 4, push_button)  # Push
+
+            run_button = QPushButton("Run")
+            run_button.clicked.connect(lambda _, i=img: self.run_image(i))
+            table.setCellWidget(row, 5, run_button)  # Run
+
+            stop_button = QPushButton("Stop")
+            stop_button.clicked.connect(lambda _, i=img: self.stop_container_for_image(i))
+            table.setCellWidget(row, 6, stop_button)  # Stop
 
         layout.addWidget(table)
         self.image_window.setLayout(layout)
         self.image_window.show()
+
+
+    def run_image(self, image):
+        try:
+            # Start a container from the image
+            container = self.docker_client.containers.run(
+                image.id,  # Use the image ID to start the container
+                detach=True,  # Run container in detached mode
+                tty=True  # Allocate a pseudo-TTY
+            )
+
+            self.logger.log_info(f"Container started from image '{image.id}'. Container ID: {container.id}")
+
+            # Open a shell in a terminal to the running container
+            self.open_shell(container)
+        except docker.errors.APIError as e:
+            self.logger.log_error(f"Error running image '{image.id}': {e}")
+
+
+
+    def stop_container_for_image(self, image):
+        try:
+            # Get the list of running containers
+            containers = self.docker_client.containers.list()
+            
+            # Find the container running the given image
+            container_to_stop = None
+            for container in containers:
+                if container.image.id == image.id:
+                    container_to_stop = container
+                    break
+            
+            if container_to_stop:
+                container_to_stop.stop()
+                self.logger.log_info(f"Container with ID '{container_to_stop.id}' stopped successfully.")
+            else:
+                self.logger.log_warning(f"No running container found for image '{image.id}'.")
+
+        except docker.errors.APIError as e:
+            self.logger.log_error(f"Error stopping container for image '{image.id}': {e}")
+
+
 
     def list_networks(self):
         try:
@@ -742,16 +824,48 @@ class DockerGui(QWidget):
         except docker.errors.APIError as e:
             self.logger.log_error(f"Error pushing image: {e}")
 
-    def pull_image(self, image):
+    def pull_image(self):
         try:
-            self.logger.log_info(f"Prompting user to pull image with ID: {image.id}")
-            repository, ok = QInputDialog.getText(self, "Pull Image", "Repository:")
-            if ok and repository:
-                self.logger.log_info(f"Pulling image from repository: {repository}")
-                self.docker_client.images.pull(repository)
-                self.logger.log_info(f"Image pulled from repository '{repository}' successfully.")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error pulling image: {e}")
+            # Prompt user for repository name
+            repository, ok = QInputDialog.getText(self, "Pull Image", "Enter image name (e.g., 'ubuntu' or 'ubuntu:latest'):")
+            
+            if not ok or not repository:
+                self.display_result("Input Error", "No repository name provided.")
+                self.logger.log_error("Input Error", "No repository name provided.")
+                return
+
+            # Create and show the progress dialog
+            progress_dialog = QProgressDialog("Pulling image...", "Cancel", 0, 100, self)
+            progress_dialog.setWindowTitle("Pulling Image")
+            progress_dialog.setWindowModality(Qt.WindowModal)
+            progress_dialog.setMinimumDuration(0)
+            
+            
+            # Thread to handle Docker image pulling
+            self.pull_thread = PullImageThread(self.docker_client, repository)
+            self.pull_thread.progress.connect(lambda message: self.update_progress(message, progress_dialog))
+            self.pull_thread.finished.connect(progress_dialog.close)
+            self.pull_thread.start()
+
+        except Exception as e:
+            self.display_result("Error", f"An error occurred: {e}")
+            self.logger.log_error("Error", f"An error occurred: {e}")
+
+    def update_progress(self, message, progress_dialog):
+        if "status" in message:
+            # Update progress dialog with status message
+            progress_dialog.setLabelText(f"Status: {message}")
+        if "complete" in message.lower():
+            progress_dialog.setValue(100)
+            self.display_result("Done!")
+        elif "starting" in message.lower():
+            progress_dialog.setValue(0)
+            self.display_result(f"Pulling ...")
+        # Allow the progress dialog to be canceled
+        if progress_dialog.wasCanceled():
+            self.pull_thread.terminate()
+
+
 
     def inspect_container(self, container):
         try:

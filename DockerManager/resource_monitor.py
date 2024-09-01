@@ -123,13 +123,13 @@ class ResourceMonitorThread(QThread):
 
                 self.update_graph.emit(cpu_usage, memory_usage_mb, disk_usage_mb)
             except KeyError as e:
-                logger.warning(f"KeyError while fetching stats: {e}")
+                self.logger.warning(f"KeyError while fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
             except docker.errors.APIError as e:
-                logger.error(f"APIError while fetching stats: {e}")
+                self.logger.error(f"APIError while fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
             except Exception as e:
-                logger.error(f"Unexpected error while fetching stats: {e}")
+                self.logger.error(f"Unexpected error while fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
 
             self.sleep(1)
