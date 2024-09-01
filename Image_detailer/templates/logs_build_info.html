@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Logs and Build Info{% endblock %}
+
+{% block content %}
+    <h1>Logs and Build Information</h1>
+    <form method="POST">
+        <input type="text" name="image_name" placeholder="Enter Docker Image Name" required>
+        <input type="submit" value="Get Logs">
+    </form>
+    {% if logs %}
+        <h2>Logs for {{ image_name }}</h2>
+        <pre>{{ logs | safe }}</pre>
+    {% endif %}
+    <a href="{{ url_for('index') }}">Back</a>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Docker Images List{% endblock %}
+
+{% block content %}
+    <h1>Docker Images List</h1>
+
+    <ul class="image-list">
+        {% for image in images %}
+            <li>
+                {{ image }}
+                <form action="/image" method="post" style="display: inline;">
+                    <input type="hidden" name="image_name" value="{{ image }}">
+                    <button type="submit" class="image-button">View Details</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Image Size Breakdown{% endblock %}
+
+{% block content %}
+    <h1>Size Breakdown for Image: {{ image_name }}</h1>
+    
+    <form action="/image_size_breakdown" method="post">
+        <label for="image_name_input">Enter Docker Image Name:</label>
+        <input type="text" id="image_name_input" name="image_name" required value="{{ image_name }}">
+        <button type="submit">Get Size Breakdown</button>
+    </form>
+
+    <ul class="size-breakdown-list">
+        {% if layers %}
+            {% for layer in layers %}
+                <li>
+                    <strong>Command:</strong> {{ layer.command }}<br>
+                    <strong>Size:</strong> {{ layer.size }}<br>
+                    <strong>Created At:</strong> {{ layer.created_at }}
+                </li>
+            {% endfor %}
+        {% else %}
+            <li>No size breakdown data available.</li>
+        {% endif %}
+    </ul>
+    
+    <a href="/">Back to Home</a>
+{% endblock %}

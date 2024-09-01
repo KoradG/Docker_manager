@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Download Image Data{% endblock %}
+
+{% block content %}
+    <h1>Download Image Data</h1>
+    <form method="POST">
+        <input type="text" name="image_name" placeholder="Enter Docker Image Name" required>
+        <input type="submit" value="Download Data">
+    </form>
+    <a href="{{ url_for('index') }}">Back</a>
+{% endblock %}

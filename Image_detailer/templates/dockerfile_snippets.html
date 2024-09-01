@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}Dockerfile Snippets{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Dockerfile Snippets</h1>
+        <form method="GET" action="{{ url_for('dockerfile_snippets') }}">
+            <input type="text" name="image_name" placeholder="Enter Docker Image Name" value="{{ image_name }}">
+            <input type="submit" value="Search">
+        </form>
+
+        {% if image_name %}
+            <h2>Dockerfile Snippets for {{ image_name }}</h2>
+            {% if snippets %}
+                <pre>{{ snippets | join('\n') }}</pre>
+            {% else %}
+                <p>No snippets found or error occurred.</p>
+            {% endif %}
+        {% endif %}
+
+        <a href="/">Back</a>
+    </div>
+{% endblock %}

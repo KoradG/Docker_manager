@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Image Tags{% endblock %}
+
+{% block content %}
+    <h1>Docker Image Tags</h1>
+    <form action="/image_tags" method="post">
+        <label for="image_name">Enter Docker Image Name:</label>
+        <input type="text" id="image_name" name="image_name" required>
+        <button type="submit">Submit</button>
+    </form>
+
+    <h2>Tags for {{ image_name }}</h2>
+    <ul>
+        {% if tags %}
+            {% for tag in tags %}
+                <li>{{ tag }}</li>
+            {% endfor %}
+        {% else %}
+            <li>No tags found.</li>
+        {% endif %}
+    </ul>
+    <a href="/">Back</a>
+{% endblock %}

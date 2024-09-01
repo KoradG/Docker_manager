@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Management</title>
+    <link rel="stylesheet" href="static/styles.css">
+</head>
+<body>
+    <header>
+        <h1>Docker Image Detailer</h1>
+    </header>
+    <nav>
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/images">Images List</a></li>
+            <li><a href="/image_tags">Image Tags</a></li>
+            <li><a href="/image_size_breakdown">Image Size Breakdown</a></li>
+            <li><a href="/environment_variables">Environment Variables</a></li>
+            <li><a href="/layer_comparison">Layer Comparison</a></li>
+            <li><a href="/interactive_visualizations">Interactive Visualizations</a></li>
+            <li><a href="/logs_build_info">Logs & Build Info</a></li>
+            <li><a href="/download_image_data">Download Image Data</a></li>
+            <li><a href="/image_metadata">Inspect Image</a></li>
+            <li><a href="/dockerfile_snippets">Dockerfile</a></li>
+            <li><a href="/volume_network_info">Volume and Network info</a></li>
+        </ul>
+    </nav>
+    <main>
+        <div class="container">
+            {% block content %}
+            <!-- Content will be injected here -->
+            {% endblock %}
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2024 Docker Management Dashboard</p>
+    </footer>
+</body>
+</html>

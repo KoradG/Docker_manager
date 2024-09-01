@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block title %}Docker Image Details{% endblock %}
+
+{% block content %}
+
+
+    <main>
+        <section id="image-details">
+            <h2>Image: {{ image_name }}</h2>
+            <p><strong>Final Layer Size:</strong> {{ final_layer_size }}</p>
+        </section>
+
+        <section id="layer-details">
+            <h2>Layer Details</h2>
+            <table id="layer-table">
+                <thead>
+                    <tr>
+                        <th>Layer</th>
+                        <th>Command</th>
+                        <th>Size</th>
+                        <th>Created At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for layer in layers %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ layer.command }}</td>
+                        <td>{{ layer.size }}</td>
+                        <td>{{ layer.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+
+{% endblock %}

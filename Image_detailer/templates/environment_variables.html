@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Environment Variables{% endblock %}
+
+{% block content %}
+    <h1>Environment Variables for Image: {{ image_name }}</h1>
+
+    <form action="/environment_variables" method="post">
+        <label for="image_name_input">Enter Docker Image Name:</label>
+        <input type="text" id="image_name_input" name="image_name" required value="{{ image_name }}">
+        <button type="submit">Get Environment Variables</button>
+    </form>
+
+    <ul class="env-vars-list">
+        {% if env_vars %}
+            {% for var in env_vars %}
+                <li>{{ var }}</li>
+            {% endfor %}
+        {% else %}
+            <li>No environment variables found.</li>
+        {% endif %}
+    </ul>
+
+    <a href="/">Back to Home</a>
+{% endblock %}

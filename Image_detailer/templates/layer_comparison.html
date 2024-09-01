@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Layer Comparison{% endblock %}
+
+{% block content %}
+    <h1>Layer Comparison</h1>
+    
+    <form method="POST">
+        <input type="text" name="image_name1" placeholder="Enter Docker Image Name 1" required>
+        <input type="text" name="image_name2" placeholder="Enter Docker Image Name 2" required>
+        <input type="submit" value="Compare">
+    </form>
+    
+    {% if layers1 and layers2 %}
+        <h2>Layers for {{ image_name1 }}</h2>
+        <ul>
+            {% for layer in layers1 %}
+                <li>Command: {{ layer.command }} | Size: {{ layer.size }} | Created At: {{ layer.created_at }}</li>
+            {% endfor %}
+        </ul>
+
+        <h2>Layers for {{ image_name2 }}</h2>
+        <ul>
+            {% for layer in layers2 %}
+                <li>Command: {{ layer.command }} | Size: {{ layer.size }} | Created At: {{ layer.created_at }}</li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No data to display. Please enter valid Docker image names.</p>
+    {% endif %}
+    
+    <a href="{{ url_for('index') }}">Back to Home</a>
+{% endblock %}

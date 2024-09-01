@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block title %}Image Metadata{% endblock %}
+
+{% block content %}
+    <div class="container">
+        <h1>Get Image Metadata</h1>
+        <form method="POST">
+            <input type="text" name="image_name" placeholder="Enter Docker Image Name" required>
+            <input type="submit" value="Get Metadata">
+        </form>
+
+        {% if metadata %}
+            <h2>Metadata for {{ image_name }}</h2>
+            <pre>{{ metadata }}</pre>
+        {% endif %}
+
+        <a href="/">Back</a>
+    </div>
+{% endblock %}
