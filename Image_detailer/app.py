@@ -9,6 +9,22 @@ import plotly.io as pio
 
 app = Flask(__name__)
 
+
+def get_docker_images():
+    try:
+        # Run the 'docker images' command to list available images
+        result = subprocess.run(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Error fetching images: {result.stderr}")
+        
+        # Split the output by newline to create a list of images
+        images = result.stdout.splitlines()
+        return images
+    except Exception as e:
+        print(f"Error fetching Docker images: {e}")
+        return []
+
+
 def get_image_history(image_name):
     try:
         history_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}} {{{{.Size}}}} {{{{.CreatedAt}}}}' {image_name}"
@@ -82,29 +98,19 @@ def images_list():
         print(f"Error retrieving Docker images: {e}")
         return "Error retrieving images", 500
 
-@app.route('/image_tags', methods=['GET', 'POST'])
-def image_tags():
-    if request.method == 'POST':
-        image_name = request.form.get('image_name')
-        if not image_name:
-            return "Image name is required", 400
-
-        try:
-            tags_cmd = "docker images --format '{{.Repository}}:{{.Tag}}'"
-            tags_output = subprocess.check_output(tags_cmd, shell=True).decode().splitlines()
-            tags = [tag for tag in tags_output if tag.startswith(image_name)]
-            if not tags:
-                tags = ["No tags found."]
-            return render_template('image_tags.html', image_name=image_name, tags=tags)
-        except subprocess.CalledProcessError as e:
-            print(f"Error retrieving tags: {e}")
-            return "Error retrieving tags", 500
-    return render_template('image_tags.html')
 
 @app.route('/image_size_breakdown', methods=['GET', 'POST'])
 def image_size_breakdown():
     image_name = None
     layers = []
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
 
     if request.method == 'POST':
         image_name = request.form.get('image_name')
@@ -134,10 +140,26 @@ def image_size_breakdown():
             print(f"Error retrieving size breakdown: {e}")
             return "Error retrieving size breakdown", 500
 
-    return render_template('image_size_breakdown.html', image_name=image_name, layers=layers)
+    return render_template('image_size_breakdown.html', 
+                           image_name=image_name, 
+                           layers=layers,
+                           available_images=available_images)
+
 
 @app.route('/environment_variables', methods=['GET', 'POST'])
 def environment_variables():
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
+
+    env_vars = None
+    image_name = None
+
     if request.method == 'POST':
         image_name = request.form.get('image_name')
         if not image_name:
@@ -154,11 +176,22 @@ def environment_variables():
             print(f"Unexpected error: {e}")
             return "Unexpected error", 500
 
-        return render_template('environment_variables.html', image_name=image_name, env_vars=env_vars)
-    return render_template('environment_variables.html')
+    return render_template('environment_variables.html', 
+                           image_name=image_name, 
+                           env_vars=env_vars, 
+                           available_images=available_images)
 
 @app.route('/layer_comparison', methods=['GET', 'POST'])
 def layer_comparison():
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
+
     if request.method == 'POST':
         image_name1 = request.form.get('image_name1')
         image_name2 = request.form.get('image_name2')
@@ -175,14 +208,28 @@ def layer_comparison():
                                    image_name1=image_name1, 
                                    image_name2=image_name2, 
                                    layers1=layers1, 
-                                   layers2=layers2)
+                                   layers2=layers2, 
+                                   available_images=available_images)
         except Exception as e:
             print(f"Error comparing layers: {e}")
             return "Error comparing layers", 500
-    return render_template('layer_comparison.html')
+
+    return render_template('layer_comparison.html', available_images=available_images)
+
 
 @app.route('/interactive_visualizations', methods=['GET', 'POST'])
 def interactive_visualizations():
+    image_name = None
+    plot_html = None
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
+
     if request.method == 'POST':
         image_name = request.form.get('image_name')
         if not image_name:
@@ -213,25 +260,54 @@ def interactive_visualizations():
                 x=sizes,
                 orientation='h',
                 text=sizes,
-                textposition='outside'
+                textposition='outside',
+                marker=dict(color='#007bff', line=dict(color='#0056b3', width=1.5))
             ))
+
             fig.update_layout(
                 title=f'Layer Sizes for {image_name}',
                 xaxis_title='Size (MB)',
-                yaxis_title='Layer'
+                yaxis_title='Layer',
+                xaxis=dict(
+                    title_font=dict(size=14, family='Arial, sans-serif'),
+                    tickfont=dict(size=12, family='Arial, sans-serif')
+                ),
+                yaxis=dict(
+                    title_font=dict(size=14, family='Arial, sans-serif'),
+                    tickfont=dict(size=12, family='Arial, sans-serif')
+                ),
+                plot_bgcolor='white',
+                paper_bgcolor='#f9f9f9',
+                margin=dict(l=40, r=40, t=40, b=40),
+                height=600
             )
+
             graph_html = pio.to_html(fig, full_html=False)
 
             return render_template('interactive_visualizations.html', 
                                    image_name=image_name, 
-                                   plot_html=graph_html)
+                                   plot_html=graph_html, 
+                                   available_images=available_images)
         except Exception as e:
             print(f"Error generating visualizations: {e}")
             return "Error generating visualizations", 500
-    return render_template('interactive_visualizations.html')
+
+    return render_template('interactive_visualizations.html', available_images=available_images)
+
 
 @app.route('/logs_build_info', methods=['GET', 'POST'])
 def logs_build_info():
+    image_name = None
+    logs = None
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
+
     if request.method == 'POST':
         image_name = request.form.get('image_name')
         if not image_name:
@@ -240,48 +316,14 @@ def logs_build_info():
         try:
             logs_cmd = f"docker history {image_name}"
             logs_output = subprocess.check_output(logs_cmd, shell=True).decode()
-            return render_template('logs_build_info.html', 
-                                   image_name=image_name, 
-                                   logs=logs_output)
+            logs = logs_output
         except subprocess.CalledProcessError as e:
             print(f"Error retrieving logs/build info: {e}")
             return "Error retrieving logs/build info", 500
-    return render_template('logs_build_info.html')
 
-@app.route('/download_image_data', methods=['GET', 'POST'])
-def download_image_data():
-    if request.method == 'POST':
-        image_name = request.form.get('image_name')
-        if not image_name:
-            return "Image name is required", 400
+    return render_template('logs_build_info.html', image_name=image_name, logs=logs, available_images=available_images)
 
-        sanitized_image_name = image_name.replace(':', '_').replace('/', '_')
-        zip_filename = f"{sanitized_image_name}_data.zip"
 
-        try:
-            if os.path.exists(zip_filename):
-                os.remove(zip_filename)
-
-            with zipfile.ZipFile(zip_filename, 'w') as zipf:
-                history_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}} {{{{.Size}}}} {{{{.CreatedAt}}}}' {image_name}"
-                history_output = subprocess.check_output(history_cmd, shell=True).decode()
-                zipf.writestr('history.txt', history_output)
-
-            if not os.path.exists(zip_filename):
-                print(f"File {zip_filename} was not created")
-                return "Error creating zip file", 500
-
-            return send_file(zip_filename, as_attachment=True)
-        except subprocess.CalledProcessError as e:
-            print(f"Command failed with error: {e.output}")
-            return "Error generating Docker history", 500
-        except Exception as e:
-            print(f"Error preparing download: {e}")
-            return "Error preparing download", 500
-        finally:
-            if os.path.exists(zip_filename):
-                os.remove(zip_filename)
-    return render_template('download_image_data.html')
 
 @app.route('/api/image', methods=['POST'])
 def image_api():
@@ -303,6 +345,14 @@ def image_api():
 def image_metadata():
     metadata = None
     image_name = None
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
 
     if request.method == 'POST':
         image_name = request.form.get('image_name')
@@ -317,20 +367,29 @@ def image_metadata():
             print(f"Error retrieving metadata: {e}")
             return "Error retrieving metadata", 500
 
-    return render_template('image_metadata.html', image_name=image_name, metadata=metadata)
+    return render_template('image_metadata.html', image_name=image_name, metadata=metadata, available_images=available_images)
+
 
 @app.route('/dockerfile_snippets', methods=['GET'])
 def dockerfile_snippets():
     image_name = request.args.get('image_name')
-    
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return abort(500, description="Error retrieving available images")
+
     if not image_name:
-        return render_template('dockerfile_snippets.html', image_name=None, snippets=None)
+        return render_template('dockerfile_snippets.html', image_name=None, snippets=None, available_images=available_images)
 
     try:
         dockerfile_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}}' {image_name}"
         dockerfile_output = subprocess.check_output(dockerfile_cmd, shell=True).decode()
         snippets = dockerfile_output.splitlines()
-        return render_template('dockerfile_snippets.html', image_name=image_name, snippets=snippets)
+        return render_template('dockerfile_snippets.html', image_name=image_name, snippets=snippets, available_images=available_images)
     except subprocess.CalledProcessError as e:
         print(f"Error fetching Dockerfile snippets: {e}")
         return abort(400, description="Error fetching Dockerfile snippets")
@@ -338,29 +397,20 @@ def dockerfile_snippets():
         print(f"Unexpected error: {e}")
         return abort(500, description="An unexpected error occurred")
 
-@app.route('/layer_changes', methods=['GET'])
-def layer_changes():
-    image_name = request.args.get('image_name')
-    if not image_name:
-        return "Image name is required", 400
-
-    try:
-        cmd = f"docker history --no-trunc --format '{{\"Layer\":\"{{.Id}}\", \"Change\":\"{{.CreatedBy}}\", \"Timestamp\":\"{{.CreatedAt}}\"}}' {image_name}"
-        output = subprocess.check_output(cmd, shell=True).decode()
-        layer_changes = json.loads(f"[{output.strip().rstrip(',')}]")
-        return render_template('layer_changes.html', image_name=image_name, layer_changes=layer_changes)
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing command: {e}")
-        return "Error retrieving data", 500
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON: {e}")
-        return "Error processing data", 500
 
 @app.route('/volume_network_info', methods=['GET', 'POST'])
 def volume_network_info():
     image_name = None
     volumes = []
     networks = []
+    available_images = []
+
+    try:
+        client = docker.from_env()
+        available_images = [image.tags[0] for image in client.images.list() if image.tags]
+    except Exception as e:
+        print(f"Error retrieving available images: {e}")
+        return "Error retrieving available images", 500
 
     if request.method == 'POST':
         image_name = request.form.get('image_name')
@@ -368,19 +418,19 @@ def volume_network_info():
             return "Image name is required", 400
 
         try:
-            client = docker.from_env()
-            image = client.images.get(image_name)
-
             volumes = extract_volumes(image_name)
             networks = extract_networks(image_name)
-
         except docker.errors.ImageNotFound:
             return "Image not found", 404
         except Exception as e:
             print(f"Error retrieving information: {e}")
             return "Error retrieving information", 500
 
-    return render_template('volume_network_info.html', image_name=image_name, volumes=volumes, networks=networks)
+    return render_template('volume_network_info.html', 
+                           image_name=image_name, 
+                           volumes=volumes, 
+                           networks=networks, 
+                           available_images=available_images)
 
 
 
@@ -397,6 +447,34 @@ def extract_networks(image_name):
         {"name": "bridge", "details": "Default bridge network."},
         {"name": "host", "details": "Host network for direct communication with the host."}
     ]
+
+
+@app.route('/vulnerabilities', methods=['GET', 'POST'])
+def vulnerabilities():
+    available_images = get_docker_images()  # Get the list of available Docker images
+
+    if request.method == 'POST':
+        image_name = request.form.get('image_name')
+        if not image_name:
+            return "Image name is required", 400
+
+        try:
+            # Run Trivy scan
+            result = subprocess.run(['trivy', 'image', '--format', 'json', image_name], capture_output=True, text=True)
+            if result.returncode != 0:
+                return f"Error scanning image: {result.stderr}", 500
+
+            # Parse JSON output from Trivy
+            vulnerabilities = json.loads(result.stdout)
+            return render_template('vulnerabilities.html', image_name=image_name, vulnerabilities=vulnerabilities, available_images=available_images)
+        
+        except Exception as e:
+            print(f"Error running Trivy: {e}")
+            return "Error running vulnerability scan", 500
+
+    return render_template('vulnerabilities.html', image_name=None, vulnerabilities=None, available_images=available_images)
+
+
     
 if __name__ == '__main__':
     app.run(debug=True)

@@ -3,11 +3,19 @@
 {% block title %}Environment Variables{% endblock %}
 
 {% block content %}
+<div class="container">
     <h1>Environment Variables for Image: {{ image_name }}</h1>
 
-    <form action="/environment_variables" method="post">
-        <label for="image_name_input">Enter Docker Image Name:</label>
-        <input type="text" id="image_name_input" name="image_name" required value="{{ image_name }}">
+    <form method="POST">
+        <div class="form-group">
+            <label for="image_name">Select Docker Image:</label>
+            <select class="form-control" id="image_name" name="image_name" required>
+                <option value="" disabled selected>Select an image...</option>
+                {% for image in available_images %}
+                <option value="{{ image }}" {% if image == image_name %}selected{% endif %}>{{ image }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <button type="submit">Get Environment Variables</button>
     </form>
 
@@ -21,5 +29,6 @@
         {% endif %}
     </ul>
 
-    <a href="/">Back to Home</a>
+    <a href="{{ url_for('index') }}">Back to Home</a>
+</div>
 {% endblock %}

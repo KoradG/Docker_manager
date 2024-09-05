@@ -3,11 +3,28 @@
 {% block title %}Layer Comparison{% endblock %}
 
 {% block content %}
+<div class="container">
     <h1>Layer Comparison</h1>
     
     <form method="POST">
-        <input type="text" name="image_name1" placeholder="Enter Docker Image Name 1" required>
-        <input type="text" name="image_name2" placeholder="Enter Docker Image Name 2" required>
+        <div class="form-group">
+            <label for="image_name1">Select Docker Image 1:</label>
+            <select class="form-control" id="image_name1" name="image_name1" required>
+                <option value="" disabled selected>Select an image...</option>
+                {% for image in available_images %}
+                <option value="{{ image }}" {% if image == image_name1 %}selected{% endif %}>{{ image }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="image_name2">Select Docker Image 2:</label>
+            <select class="form-control" id="image_name2" name="image_name2" required>
+                <option value="" disabled selected>Select an image...</option>
+                {% for image in available_images %}
+                <option value="{{ image }}" {% if image == image_name2 %}selected{% endif %}>{{ image }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <input type="submit" value="Compare">
     </form>
     
@@ -26,8 +43,9 @@
             {% endfor %}
         </ul>
     {% else %}
-        <p>No data to display. Please enter valid Docker image names.</p>
+        <p>No data to display. Please select valid Docker images.</p>
     {% endif %}
     
     <a href="{{ url_for('index') }}">Back to Home</a>
+</div>
 {% endblock %}

@@ -29,24 +29,29 @@ This is a web-based tool designed to provide in-depth insights into Docker image
 - **Description**: Retrieves and displays logs related to the Docker image build process. This includes build commands, timestamps, and any relevant output.
 - **Use Case**: Helps in diagnosing build issues and understanding the build process, which is useful for troubleshooting and verifying the build steps.
 
-### 7. Download Image Data
-- **Description**: Allows users to download Docker image data in a ZIP file. This includes image history and other relevant information.
-- **Use Case**: Facilitates offline analysis and record-keeping by providing a portable version of the image data.
-
-### 8. Inspect Image Metadata
+### 7. Inspect Image Metadata
 - **Description**: Shows detailed metadata of a Docker image, including labels, configuration settings, and other relevant properties.
 - **Use Case**: Useful for auditing and verifying image configurations, ensuring compliance with standards and best practices.
 
-### 9. Dockerfile Snippets
+### 8. Dockerfile Snippets
 - **Description**: Retrieves and displays snippets of the Dockerfile used to build the Docker image. This provides insights into the build instructions and configurations.
 - **Use Case**: Helps users understand how the image was constructed, which is valuable for documentation, reproducibility, and educational purposes.
 
-### 10. Volume and Network Information
+### 9. Volume and Network Information
 - **Description**: Displays information about volumes and networks associated with a Docker image. This includes details about data volumes and network configurations.
 - **Use Case**: Useful for understanding resource allocations and network setups associated with Docker images, which can impact performance and connectivity.
 
+### 11. Image Vulnerabilities
+- **Description**: Identifies and displays vulnerabilities present in a Docker image. This feature uses vulnerability databases to provide information on security issues related to the image’s components.
+- **Use Case**: Essential for security auditing and ensuring that Docker images do not contain known vulnerabilities that could compromise the system.
+
+## Dependencies
+- docker
+- trivy
+
 ## Useage
 1. Clone the Repository
-2. Install requirements (pip install requirements.txt)
-3. Run (python app.py)
+2. Install dependencies
+3. Install requirements (pip install requirements.txt)
+4. Run (python app.py)
 

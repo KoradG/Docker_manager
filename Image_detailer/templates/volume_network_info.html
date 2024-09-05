@@ -3,67 +3,73 @@
 {% block title %}Volume and Network Information{% endblock %}
 
 {% block content %}
-    <div class="container">
-        <h1>Volume and Network Information</h1>
-        
-        {% if not image_name %}
-        <form action="/volume_network_info" method="post">
-            <label for="image_name">Docker Image Name:</label>
-            <input type="text" id="image_name" name="image_name" required>
-            <button type="submit">Submit</button>
-        </form>
-        {% else %}
-        <h2>Information for {{ image_name }}</h2>
+<div class="container">
+    <h1>Volume and Network Information</h1>
+    
+    {% if not image_name %}
+    <form action="/volume_network_info" method="post">
+        <div class="form-group">
+            <label for="image_name">Select Docker Image:</label>
+            <select class="form-control" id="image_name" name="image_name" required onchange="this.form.submit()">
+                <option value="" disabled selected>Select an image...</option>
+                {% for image in available_images %}
+                <option value="{{ image }}">{{ image }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+    {% else %}
+    <h2>Information for {{ image_name }}</h2>
 
-        {% if volumes %}
-        <section id="volumes">
-            <h2>Volumes</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Volume</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for volume in volumes %}
-                    <tr>
-                        <td>{{ volume.name }}</td>
-                        <td>{{ volume.details }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </section>
-        {% else %}
-        <p>No volume information available.</p>
-        {% endif %}
+    {% if volumes %}
+    <section id="volumes">
+        <h3>Volumes</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Volume</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for volume in volumes %}
+                <tr>
+                    <td>{{ volume.name }}</td>
+                    <td>{{ volume.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% else %}
+    <p>No volume information available.</p>
+    {% endif %}
 
-        {% if networks %}
-        <section id="networks">
-            <h2>Networks</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Network</th>
-                        <th>Details</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for network in networks %}
-                    <tr>
-                        <td>{{ network.name }}</td>
-                        <td>{{ network.details }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </section>
-        {% else %}
-        <p>No network information available.</p>
-        {% endif %}
+    {% if networks %}
+    <section id="networks">
+        <h3>Networks</h3>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Network</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for network in networks %}
+                <tr>
+                    <td>{{ network.name }}</td>
+                    <td>{{ network.details }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% else %}
+    <p>No network information available.</p>
+    {% endif %}
 
-        <a href="/">Back</a>
-        {% endif %}
-    </div>
+    <a href="/">Back</a>
+    {% endif %}
+</div>
 {% endblock %}

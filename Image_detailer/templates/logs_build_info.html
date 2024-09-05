@@ -3,14 +3,26 @@
 {% block title %}Logs and Build Info{% endblock %}
 
 {% block content %}
-    <h1>Logs and Build Information</h1>
-    <form method="POST">
-        <input type="text" name="image_name" placeholder="Enter Docker Image Name" required>
-        <input type="submit" value="Get Logs">
-    </form>
-    {% if logs %}
-        <h2>Logs for {{ image_name }}</h2>
-        <pre>{{ logs | safe }}</pre>
-    {% endif %}
-    <a href="{{ url_for('index') }}">Back</a>
+    <div class="container">
+        <h1>Logs and Build Information</h1>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="image_name">Select Docker Image:</label>
+                <select class="form-control" id="image_name" name="image_name" required onchange="this.form.submit()">
+                    <option value="" disabled selected>Select an image...</option>
+                    {% for image in available_images %}
+                    <option value="{{ image }}" {% if image == image_name %}selected{% endif %}>{{ image }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </form>
+
+        {% if logs %}
+            <h2>Logs for {{ image_name }}</h2>
+            <pre>{{ logs | safe }}</pre>
+        {% endif %}
+
+        <a href="{{ url_for('index') }}">Back</a>
+    </div>
 {% endblock %}

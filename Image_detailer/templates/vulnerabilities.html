@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}Vulnerability Scan{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1>Vulnerability Scan</h1>
+    
+    <form method="POST" action="/vulnerabilities">
+        <label for="image_name">Docker Image Name:</label>
+        <select name="image_name" id="image_name" required>
+            <option value="" disabled selected>Select a Docker image</option>
+            {% for image in available_images %}
+                <option value="{{ image }}">{{ image }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Scan for Vulnerabilities</button>
+    </form>
+    
+    {% if vulnerabilities %}
+    <h2>Vulnerabilities for {{ image_name }}</h2>
+    
+    {% if vulnerabilities.Results %}
+    <div class="table-responsive">
+        <table class="vuln-table">
+            <thead>
+                <tr>
+                    <th>CVE</th>
+                    <th>Package</th>
+                    <th>Severity</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for result in vulnerabilities.Results %}
+                {% for vuln in result.Vulnerabilities %}
+                <tr>
+                    <td>{{ vuln.VulnerabilityID }}</td>
+                    <td>{{ vuln.PkgName }}</td>
+                    <td class="severity-{{ vuln.Severity|lower }}">{{ vuln.Severity }}</td>
+                    <td>{{ vuln.Description }}</td>
+                </tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p>No vulnerabilities found for {{ image_name }}.</p>
+    {% endif %}
+    {% endif %}
+    
+    <a href="/">Back</a>
+</div>
+{% endblock %}

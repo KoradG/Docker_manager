@@ -5,9 +5,17 @@
 {% block content %}
     <div class="container">
         <h1>Get Image Metadata</h1>
+        
         <form method="POST">
-            <input type="text" name="image_name" placeholder="Enter Docker Image Name" required>
-            <input type="submit" value="Get Metadata">
+            <div class="form-group">
+                <label for="image_name">Select Docker Image:</label>
+                <select class="form-control" id="image_name" name="image_name" required onchange="this.form.submit()">
+                    <option value="" disabled selected>Select an image...</option>
+                    {% for image in available_images %}
+                    <option value="{{ image }}" {% if image == image_name %}selected{% endif %}>{{ image }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </form>
 
         {% if metadata %}

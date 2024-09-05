@@ -100,3 +100,140 @@ form button:hover {
     border-radius: 5px;
     background-color: #fff;
 }
+
+
+/* Table Styles */
+.table-responsive {
+    overflow-x: auto;
+}
+
+.vuln-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 16px;
+    text-align: left;
+}
+
+.vuln-table thead tr {
+    background-color: #333;
+    color: white;
+    text-align: center;
+    font-weight: bold;
+}
+
+.vuln-table th, .vuln-table td {
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+}
+
+.vuln-table tbody tr:nth-child(even) {
+    background-color: #f3f3f3;
+}
+
+.vuln-table tbody tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Severity-Specific Styles */
+.severity-high {
+    color: #d9534f;
+    font-weight: bold;
+}
+
+.severity-medium {
+    color: #f0ad4e;
+    font-weight: bold;
+}
+
+.severity-low {
+    color: #5bc0de;
+    font-weight: bold;
+}
+
+.severity-critical {
+    color: #d9534f;
+    background-color: #f2dede;
+    font-weight: bold;
+}
+
+/* Plot Container Styles */
+.plot-container {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.plot-container h2 {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.plot-container .plotly-graph-div {
+    max-width: 100%;
+    height: auto;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    background-color: #fff;
+}
+
+/* Button Styles */
+form button {
+    padding: 10px 20px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+form button:hover {
+    background-color: #0056b3;
+}
+
+/* Back Link Styles */
+.back-link {
+    display: block;
+    text-align: center;
+    margin-top: 30px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+nav {
+    background-color: #000000;
+    padding: 10px;
+}
+
+.nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.nav-list li {
+    margin: 5px;
+}
+
+.nav-list a {
+    text-decoration: none;
+    color: #007bff; 
+    font-weight: bold;
+    padding: 10px 15px;
+    display: block;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.nav-list a:hover {
+    background-color: rgba(128, 128, 128, 0.479); 
+}

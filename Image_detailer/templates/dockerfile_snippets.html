@@ -5,9 +5,17 @@
 {% block content %}
     <div class="container">
         <h1>Dockerfile Snippets</h1>
+
         <form method="GET" action="{{ url_for('dockerfile_snippets') }}">
-            <input type="text" name="image_name" placeholder="Enter Docker Image Name" value="{{ image_name }}">
-            <input type="submit" value="Search">
+            <div class="form-group">
+                <label for="image_name">Select Docker Image:</label>
+                <select class="form-control" id="image_name" name="image_name" required onchange="this.form.submit()">
+                    <option value="" disabled selected>Select an image...</option>
+                    {% for image in available_images %}
+                    <option value="{{ image }}" {% if image == image_name %}selected{% endif %}>{{ image }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </form>
 
         {% if image_name %}
@@ -15,7 +23,7 @@
             {% if snippets %}
                 <pre>{{ snippets | join('\n') }}</pre>
             {% else %}
-                <p>No snippets found or error occurred.</p>
+                <p>No snippets found or an error occurred.</p>
             {% endif %}
         {% endif %}
 
