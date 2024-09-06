@@ -1,12 +1,12 @@
-
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, 
-    QInputDialog, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QLineEdit, QLabel, QDialog, QFileDialog, QMessageBox, QVBoxLayout, QHBoxLayout,
-    QWidget, QVBoxLayout, QPushButton, QTextEdit, QFrame, QShortcut, QDialogButtonBox,
-    QProgressBar, QProgressDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QInputDialog,
+    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QLabel, QDialog,
+    QFileDialog, QMessageBox, QFrame, QShortcut, QDialogButtonBox, QProgressBar,
+    QProgressDialog, QGroupBox, QSizePolicy, QScrollArea, QMenu
 )
+
 from PyQt5.QtGui import QKeySequence
+from PyQt5.QtCore import QPropertyAnimation, QRect
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import os
 import yaml
@@ -92,49 +92,21 @@ class DockerGui(QWidget):
 
         main_layout = QVBoxLayout()
 
-        # Create status label and progress bar
-        self.status_label = QLabel("Status: Ready")
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(0)
-    
-
-        # Create a horizontal layout for the section buttons
+        # Create a QGroupBox to group the section buttons with padding
+        section_group = QGroupBox("Actions")
         section_button_layout = QHBoxLayout()
 
         # Create frames for each section, which will be collapsible
-        self.container_frame = QFrame()
-        self.container_frame.setFrameShape(QFrame.StyledPanel)
-        self.container_frame.setVisible(False)  # Initially collapsed
-
-        self.volume_frame = QFrame()
-        self.volume_frame.setFrameShape(QFrame.StyledPanel)
-        self.volume_frame.setVisible(False)  # Initially collapsed
-
-        self.network_frame = QFrame()
-        self.network_frame.setFrameShape(QFrame.StyledPanel)
-        self.network_frame.setVisible(False)  # Initially collapsed
-
-        self.other_frame = QFrame()
-        self.other_frame.setFrameShape(QFrame.StyledPanel)
-        self.other_frame.setVisible(False)  # Initially collapsed
+        self.container_frame = self.create_frame()
+        self.volume_frame = self.create_frame()
+        self.network_frame = self.create_frame()
+        self.other_frame = self.create_frame()
 
         # Add buttons to control the visibility of each section
-        self.container_button = QPushButton("Image Actions", self)
-        self.container_button.setCheckable(True)
-        self.container_button.clicked.connect(lambda: self.toggle_frame(self.container_frame, self.container_button))
-
-        self.volume_button = QPushButton("Volume Actions", self)
-        self.volume_button.setCheckable(True)
-        self.volume_button.clicked.connect(lambda: self.toggle_frame(self.volume_frame, self.volume_button))
-
-        self.network_button = QPushButton("Network Actions", self)
-        self.network_button.setCheckable(True)
-        self.network_button.clicked.connect(lambda: self.toggle_frame(self.network_frame, self.network_button))
-
-        self.other_button = QPushButton("Other Actions", self)
-        self.other_button.setCheckable(True)
-        self.other_button.clicked.connect(lambda: self.toggle_frame(self.other_frame, self.other_button))
+        self.container_button = self.create_button("Image Actions", self.container_frame)
+        self.volume_button = self.create_button("Volume Actions", self.volume_frame)
+        self.network_button = self.create_button("Network Actions", self.network_frame)
+        self.other_button = self.create_button("Other Actions", self.other_frame)
 
         # Add the buttons to the horizontal layout
         section_button_layout.addWidget(self.container_button)
@@ -142,8 +114,9 @@ class DockerGui(QWidget):
         section_button_layout.addWidget(self.network_button)
         section_button_layout.addWidget(self.other_button)
 
-        # Add the horizontal layout to the main layout
-        main_layout.addLayout(section_button_layout)
+        # Set the layout for the section group
+        section_group.setLayout(section_button_layout)
+        main_layout.addWidget(section_group)
 
         # Populate the frames with their respective buttons and layouts
         self.populate_container_frame(self.container_frame)
@@ -165,8 +138,7 @@ class DockerGui(QWidget):
         # Add Help button to the bottom right
         self.help_button = QPushButton("Help", self)
         self.help_button.clicked.connect(self.show_help_dialog)
-        main_layout.addWidget(self.help_button)
-        self.help_button.setFixedSize(100, 30)  # Set size if desired
+        self.help_button.setFixedSize(100, 30)
 
         # Make sure the Help button is aligned to the bottom right
         help_button_layout = QHBoxLayout()
@@ -178,6 +150,56 @@ class DockerGui(QWidget):
 
         # Add hotkeys for existing buttons
         self.add_shortcuts()
+
+    def create_frame(self):
+        frame = QFrame()
+        frame.setFrameShape(QFrame.StyledPanel)
+        frame.setVisible(False)
+        return frame
+
+    def create_button(self, text, associated_frame):
+        button = QPushButton(text, self)
+        button.setCheckable(True)
+        button.clicked.connect(lambda: self.toggle_frame(associated_frame, button))
+        button.setStyleSheet("""
+            QPushButton {
+                padding: 10px;
+                background-color: #3498db;
+                color: white;
+                border-radius: 5px;
+            }
+            QPushButton:checked {
+                background-color: #2980b9;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        return button
+
+    def toggle_frame(self, frame, button):
+        if frame.isVisible():
+            self.animate_frame(frame, False)
+            button.setChecked(False)
+        else:
+            self.animate_frame(frame, True)
+            button.setChecked(True)
+
+    def animate_frame(self, frame, expanding):
+        animation = QPropertyAnimation(frame, b"geometry")
+        start_geometry = frame.geometry()
+        if expanding:
+            end_geometry = QRect(start_geometry.x(), start_geometry.y(), start_geometry.width(), 200)
+        else:
+            end_geometry = QRect(start_geometry.x(), start_geometry.y(), start_geometry.width(), 0)
+
+        animation.setDuration(300)
+        animation.setStartValue(start_geometry)
+        animation.setEndValue(end_geometry)
+        animation.start()
+
+        frame.setVisible(True if expanding else False)
+
 
     def add_shortcuts(self):
         # Define and add hotkeys for existing buttons
@@ -195,55 +217,92 @@ class DockerGui(QWidget):
         button.setChecked(frame.isVisible())
 
     def populate_container_frame(self, frame):
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setSpacing(10)  # Add spacing between buttons
+
         container_buttons = [
             ("List Containers", self.list_containers),
             ("Create Container", self.create_container_prompt),
             ("List Images", self.list_images),
             ("Pull Image", self.pull_image),
         ]
+
         for text, func in container_buttons:
-            button = QPushButton(text, self)
-            button.clicked.connect(func)
+            button = self.create_styled_button(text, func)
             layout.addWidget(button)
+
+        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
         frame.setLayout(layout)
 
     def populate_volume_frame(self, frame):
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setSpacing(10)  # Add spacing between buttons
+
         volume_buttons = [
             ("List Volumes", self.list_volumes),
             ("Create Volume", self.create_volume_prompt),
             ("Prune Unused Volumes", self.prune_volumes),
         ]
+
         for text, func in volume_buttons:
-            button = QPushButton(text, self)
-            button.clicked.connect(func)
+            button = self.create_styled_button(text, func)
             layout.addWidget(button)
+
+        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
         frame.setLayout(layout)
 
     def populate_network_frame(self, frame):
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setSpacing(10)  # Add spacing between buttons
+
         network_buttons = [
             ("List Networks", self.list_networks),
             ("Create Network", self.create_network_prompt),
         ]
+
         for text, func in network_buttons:
-            button = QPushButton(text, self)
-            button.clicked.connect(func)
+            button = self.create_styled_button(text, func)
             layout.addWidget(button)
+
+        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
         frame.setLayout(layout)
 
     def populate_other_frame(self, frame):
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
+        layout.setSpacing(10)  # Add spacing between buttons
+
         other_buttons = [
             ("Create Compose File", self.create_compose_form),
             ("Docker Swarm", self.show_swarm_dialog),
         ]
+
         for text, func in other_buttons:
-            button = QPushButton(text, self)
-            button.clicked.connect(func)
+            button = self.create_styled_button(text, func)
             layout.addWidget(button)
-        frame.setLayout(layout)    
+
+        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
+        frame.setLayout(layout)
+
+    def create_styled_button(self, text, func):
+        button = QPushButton(text, self)
+        button.clicked.connect(func)
+        button.setStyleSheet("""
+            QPushButton {
+                padding: 10px;
+                background-color: #2ecc71;
+                color: white;
+                border-radius: 5px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #1e8449;
+            }
+        """)
+        return button
+
 
 
     def display_result(self, result):
@@ -264,61 +323,79 @@ class DockerGui(QWidget):
 
         self.container_window = QWidget()
         self.container_window.setWindowTitle("Containers")
-        self.container_window.setGeometry(100, 100, 1300, 600)
+        self.container_window.setGeometry(100, 100, 1000, 600)  # Adjusted size for better fit
 
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the table
+
         table = QTableWidget()
         table.setRowCount(len(containers))
-        table.setColumnCount(13)
+        table.setColumnCount(6)  # Columns: ID, Name, Status, Manage, Inspect, Stats
         table.setHorizontalHeaderLabels([
-            "ID", "Name", "Status", "Start", "Stop", "Pause", "Unpause",
-            "logs", "Shell", "Remove", "Inspect", "Stats", "Monitor"
+            "ID", "Name", "Status", "Manage", "Inspect", "Stats"
         ])
 
+        # Customize header
         header = table.horizontalHeader()
+        header.setStyleSheet("""
+            QHeaderView::section {
+                background-color: #3498db;
+                color: white;
+                padding: 5px;
+                border: 1px solid #2980b9;
+            }
+        """)
+        header.setSectionResizeMode(QHeaderView.Stretch)  # Let columns stretch to fit the window
+        table.setAlternatingRowColors(True)
+        table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #bdc3c7;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+        """)
+        
+        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
 
-        # Set the resize mode for each column
-        for i in range(13):
-            if i in [0, 1, 2]:  # Columns that should fit their content
-                header.setSectionResizeMode(i, QHeaderView.ResizeToContents)
-            else:  # Columns that should stretch
-                header.setSectionResizeMode(i, QHeaderView.Stretch)
-
-        # Ensure columns can be resized interactively
-        header.setSectionResizeMode(QHeaderView.Interactive)
-
-        # Optional: Set minimum widths for better readability
-        table.setColumnWidth(0, 100)  # ID column width
-        table.setColumnWidth(1, 150)  # Name column width
-        table.setColumnWidth(2, 150)  # Status column width
-
+        # Populate the table with data and grouped action buttons
         for row, container in enumerate(containers):
             table.setItem(row, 0, QTableWidgetItem(container.id))
             table.setItem(row, 1, QTableWidgetItem(container.name))
             table.setItem(row, 2, QTableWidgetItem(container.status))
 
-            buttons = {
-                "Start": (3, self.start_container),
-                "Stop": (4, self.stop_container),
-                "Pause": (5, self.pause_container),
-                "Unpause": (6, self.unpause_container),
-                "logs": (7, self.open_log),
-                "Shell": (8, self.open_shell),
-                "Remove": (9, self.remove_container),
-                "Inspect": (10, self.inspect_container),
-                "Stats": (11, self.show_stats),
-                "Monitor": (12, self.open_monitor)
-            }
+            # Create "Manage" button with related actions
+            manage_button = QPushButton("Manage")
+            manage_menu = QMenu(manage_button)
+            manage_menu.addAction("Start", lambda c=container: self.start_container(c))
+            manage_menu.addAction("Stop", lambda c=container: self.stop_container(c))
+            manage_menu.addAction("Pause", lambda c=container: self.pause_container(c))
+            manage_menu.addAction("Unpause", lambda c=container: self.unpause_container(c))
+            manage_menu.addAction("Remove", lambda c=container: self.remove_container(c))
+            manage_button.setMenu(manage_menu)
+            table.setCellWidget(row, 3, manage_button)
 
-            for text, (col, action) in buttons.items():
-                button = QPushButton(text)
-                button.clicked.connect(lambda _, c=container, a=action: a(c))
-                table.setCellWidget(row, col, button)
+            # Create "Inspect" button with related actions
+            inspect_button = QPushButton("Inspect")
+            inspect_menu = QMenu(inspect_button)
+            inspect_menu.addAction("Logs", lambda c=container: self.open_log(c))
+            inspect_menu.addAction("Shell", lambda c=container: self.open_shell(c))
+            inspect_menu.addAction("Inspect", lambda c=container: self.inspect_container(c))
+            inspect_button.setMenu(inspect_menu)
+            table.setCellWidget(row, 4, inspect_button)
+
+            # Create "Stats" button with related actions
+            stats_button = QPushButton("Stats")
+            stats_menu = QMenu(stats_button)
+            stats_menu.addAction("Stats", lambda c=container: self.show_stats(c))
+            stats_menu.addAction("Monitor", lambda c=container: self.open_monitor(c))
+            stats_button.setMenu(stats_menu)
+            table.setCellWidget(row, 5, stats_button)
 
         layout.addWidget(table)
         self.container_window.setLayout(layout)
         self.container_window.show()
-
+        
     def list_images(self):
         try:
             self.logger.log_info("Listing all images.")
@@ -333,14 +410,30 @@ class DockerGui(QWidget):
 
         self.image_window = QWidget()
         self.image_window.setWindowTitle("Images")
-        self.image_window.setGeometry(100, 100, 1000, 600)
+        self.image_window.setGeometry(100, 100, 1000, 600)  # Adjusted size for better fit
 
         layout = QVBoxLayout()
         table = QTableWidget()
         table.setRowCount(len(images))
         table.setColumnCount(7)  # Adjusted to 7 columns
-        table.setHorizontalHeaderLabels(["ID", "Tags", "Remove", "Tag", "Push", "Run", "Stop"])  # Updated header labels
+        table.setHorizontalHeaderLabels([
+            "ID", "Tags", "Remove", "Tag", "Push", "Run", "Stop"
+        ])  # Updated header labels
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # Apply styling to the table
+        table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #bdc3c7;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+        """)
+        
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
 
         for row, img in enumerate(images):
             image_id = img.id
@@ -349,31 +442,52 @@ class DockerGui(QWidget):
             table.setItem(row, 0, QTableWidgetItem(image_id))  # ID
             table.setItem(row, 1, QTableWidgetItem(", ".join(tags)))  # Tags
 
-            # Create and add buttons
+            # Create and style buttons
+            button_style = """
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 5px 10px;
+                    min-width: 80px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+                QPushButton:pressed {
+                    background-color: #1c598a;
+                }
+            """
+
             remove_button = QPushButton("Remove")
+            remove_button.setStyleSheet(button_style)
             remove_button.clicked.connect(lambda _, i=img: self.remove_image(i))
             table.setCellWidget(row, 2, remove_button)  # Remove
 
             tag_button = QPushButton("Tag")
+            tag_button.setStyleSheet(button_style)
             tag_button.clicked.connect(lambda _, i=img: self.tag_image(i))
             table.setCellWidget(row, 3, tag_button)  # Tag
 
             push_button = QPushButton("Push")
+            push_button.setStyleSheet(button_style)
             push_button.clicked.connect(lambda _, i=img: self.push_image(i))
             table.setCellWidget(row, 4, push_button)  # Push
 
             run_button = QPushButton("Run")
+            run_button.setStyleSheet(button_style)
             run_button.clicked.connect(lambda _, i=img: self.run_image(i))
             table.setCellWidget(row, 5, run_button)  # Run
 
             stop_button = QPushButton("Stop")
+            stop_button.setStyleSheet(button_style)
             stop_button.clicked.connect(lambda _, i=img: self.stop_container_for_image(i))
             table.setCellWidget(row, 6, stop_button)  # Stop
 
         layout.addWidget(table)
         self.image_window.setLayout(layout)
         self.image_window.show()
-
 
     def run_image(self, image):
         try:
@@ -430,30 +544,65 @@ class DockerGui(QWidget):
 
         self.network_window = QWidget()
         self.network_window.setWindowTitle("Networks")
-        self.network_window.setGeometry(100, 100, 800, 600)
+        self.network_window.setGeometry(100, 100, 800, 600)  # Adjusted size for better fit
 
         layout = QVBoxLayout()
         table = QTableWidget()
         table.setRowCount(len(networks))
         table.setColumnCount(6)
-        table.setHorizontalHeaderLabels(["Name", "ID", "Driver", "Scope", "Inspect", "Remove"])
+        table.setHorizontalHeaderLabels([
+            "Name", "ID", "Driver", "Scope", "Inspect", "Remove"
+        ])  # Updated header labels
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        for row, network in enumerate(networks):
-            table.setItem(row, 0, QTableWidgetItem(network.name))
-            table.setItem(row, 1, QTableWidgetItem(network.id))
-            table.setItem(row, 2, QTableWidgetItem(network.attrs.get('Driver', '')))
-            table.setItem(row, 3, QTableWidgetItem(network.attrs.get('Scope', '')))
-
-            buttons = {
-                "Inspect": (4, self.inspect_network),
-                "Remove": (5, self.remove_network_prompt)
+        # Apply styling to the table
+        table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #bdc3c7;
+                font-size: 14px;
             }
+            QTableWidget::item {
+                padding: 5px;
+            }
+        """)
+        
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
 
-            for text, (col, action) in buttons.items():
-                button = QPushButton(text)
-                button.clicked.connect(lambda _, n=network, a=action: a(n))
-                table.setCellWidget(row, col, button)
+        # Button styling
+        button_style = """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px 10px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1c598a;
+            }
+        """
+
+        for row, network in enumerate(networks):
+            table.setItem(row, 0, QTableWidgetItem(network.name))  # Name
+            table.setItem(row, 1, QTableWidgetItem(network.id))  # ID
+            table.setItem(row, 2, QTableWidgetItem(network.attrs.get('Driver', '')))  # Driver
+            table.setItem(row, 3, QTableWidgetItem(network.attrs.get('Scope', '')))  # Scope
+
+            # Create and style buttons
+            inspect_button = QPushButton("Inspect")
+            inspect_button.setStyleSheet(button_style)
+            inspect_button.clicked.connect(lambda _, n=network: self.inspect_network(n))
+            table.setCellWidget(row, 4, inspect_button)  # Inspect
+
+            remove_button = QPushButton("Remove")
+            remove_button.setStyleSheet(button_style)
+            remove_button.clicked.connect(lambda _, n=network: self.remove_network_prompt(n))
+            table.setCellWidget(row, 5, remove_button)  # Remove
 
         layout.addWidget(table)
         self.network_window.setLayout(layout)
@@ -473,23 +622,59 @@ class DockerGui(QWidget):
 
         self.volume_window = QWidget()
         self.volume_window.setWindowTitle("Volumes")
-        self.volume_window.setGeometry(100, 100, 800, 600)
+        self.volume_window.setGeometry(100, 100, 800, 600)  # Adjusted size for better fit
 
         layout = QVBoxLayout()
         table = QTableWidget()
         table.setRowCount(len(volumes))
         table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["Name", "ID", "Driver", "Remove"])
+        table.setHorizontalHeaderLabels([
+            "Name", "ID", "Driver", "Remove"
+        ])  # Updated header labels
         table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
-        for row, volume in enumerate(volumes):
-            table.setItem(row, 0, QTableWidgetItem(volume.name))
-            table.setItem(row, 1, QTableWidgetItem(volume.id))
-            table.setItem(row, 2, QTableWidgetItem(volume.attrs.get('Driver', '')))
+        # Apply styling to the table
+        table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #bdc3c7;
+                font-size: 14px;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+        """)
+        
+        table.setAlternatingRowColors(True)
+        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
 
+        # Button styling
+        button_style = """
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 5px 10px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+            QPushButton:pressed {
+                background-color: #1c598a;
+            }
+        """
+
+        for row, volume in enumerate(volumes):
+            table.setItem(row, 0, QTableWidgetItem(volume.name))  # Name
+            table.setItem(row, 1, QTableWidgetItem(volume.id))  # ID
+            table.setItem(row, 2, QTableWidgetItem(volume.attrs.get('Driver', '')))  # Driver
+
+            # Create and style button
             remove_button = QPushButton("Remove")
+            remove_button.setStyleSheet(button_style)
             remove_button.clicked.connect(lambda _, v=volume: self.remove_volume_prompt(v))
-            table.setCellWidget(row, 3, remove_button)
+            table.setCellWidget(row, 3, remove_button)  # Remove
 
         layout.addWidget(table)
         self.volume_window.setLayout(layout)
