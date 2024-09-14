@@ -41,7 +41,7 @@ This is a web-based tool designed to provide in-depth insights into Docker image
 - **Description**: Displays information about volumes and networks associated with a Docker image. This includes details about data volumes and network configurations.
 - **Use Case**: Useful for understanding resource allocations and network setups associated with Docker images, which can impact performance and connectivity.
 
-### 11. Image Vulnerabilities
+### 10. Image Vulnerabilities
 - **Description**: Identifies and displays vulnerabilities present in a Docker image. This feature uses vulnerability databases to provide information on security issues related to the image’s components.
 - **Use Case**: Essential for security auditing and ensuring that Docker images do not contain known vulnerabilities that could compromise the system.
 

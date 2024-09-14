@@ -1,10 +1,8 @@
-# Docker Manager
+# Docker Manager Application
 
 ## Overview
 
 The Docker Manager is a desktop application developed to facilitate Docker container management through a user-friendly graphical interface. By leveraging PyQt5 for the GUI and Docker's Python SDK for backend operations, the application provides a streamlined approach to handling Docker environments. This tool simplifies Docker management by abstracting complex command-line operations into a graphical interface, making it accessible to users of varying expertise.
-
-Run the application with `main.py`.
 
 ### Key Objectives
 
@@ -70,6 +68,7 @@ The `ResourceMonitor` class is responsible for monitoring and visualizing the re
 - **Visualization**:
     - **Real-Time Graphs**: Displays dynamic graphs representing the real-time resource usage of containers.
 
+
 #### 3. GUI Components
 
 The GUI components are implemented using PyQt5 and provide the user interface for interacting with Docker and managing Docker resources.
@@ -95,9 +94,6 @@ The GUI components are implemented using PyQt5 and provide the user interface fo
     - **Listing**: Lists Docker volumes and their details.
     - **Operations**: Allows for volume creation, inspection, removal, and pruning.
 
-- **Help Button**:
-    - **Functionality**: Opens a dialog providing help and information about using the application and available shortcut keys.
-
 ### Application Workflow
 
 1. **Startup**:
@@ -108,17 +104,10 @@ The GUI components are implemented using PyQt5 and provide the user interface fo
     - Users interact with the GUI to perform Docker operations, such as managing containers or deploying applications.
 
 3. **Backend Processing**:
-    - Backend services like `DockerClient`, `DockerGui`, and `ResourceMonitor` process the user's requests by interacting with Docker's API.
+    - Backend services like `DockerClient`, `DockerGui` and `ResourceMonitor` process the user's requests by interacting with Docker's API.
 
 4. **Data Display**:
     - Results from backend operations are processed and displayed in the GUI components for user interaction.
-
-### Hotkeys
-
-- **Ctrl+1**: Toggle Container Actions
-- **Ctrl+2**: Toggle Volume Actions
-- **Ctrl+3**: Toggle Network Actions
-- **Ctrl+4**: Toggle Other Actions
 
 ### Dependencies
 
@@ -129,4 +118,5 @@ The GUI components are implemented using PyQt5 and provide the user interface fo
 
 ### Conclusion
 
-The Docker Manager provides a powerful and intuitive solution for managing Docker containers and resources. By integrating PyQt5 for the graphical interface and Docker's Python SDK for backend operations, the application simplifies Docker management tasks and enhances user experience. Features such as real-time resource monitoring, container and image management, Docker Compose deployment, and the newly added Help button make it a comprehensive tool for Docker users.
+The Docker Manager provides a powerful and intuitive solution for managing Docker containers and resources. By integrating PyQt5 for the graphical interface and Docker's Python SDK for backend operations, the application simplifies Docker management tasks and enhances user experience. Features such as real-time resource monitoring, container and image management, and Docker Compose deployment make it a comprehensive tool for Docker users.
+

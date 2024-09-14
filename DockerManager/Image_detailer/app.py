@@ -1,72 +1,155 @@
 from flask import Flask, request, render_template, jsonify, send_file, abort
 import subprocess
-import os
-import zipfile
 import json
 import docker
 import plotly.graph_objs as go
 import plotly.io as pio
+import threading 
+import requests
+
 
 app = Flask(__name__)
 
 
-def get_docker_images():
-    try:
-        # Run the 'docker images' command to list available images
-        result = subprocess.run(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], capture_output=True, text=True)
-        if result.returncode != 0:
-            raise Exception(f"Error fetching images: {result.stderr}")
+
+class ImageD():
+    def __init__(self):
+        self.server_thread = None
+        self.server_running = threading.Event()
+
+    def image_details(self):
+        """Start the Flask server if it's not already running and print URL."""
+        print("Open http://localhost:5000 for image details!")
         
-        # Split the output by newline to create a list of images
-        images = result.stdout.splitlines()
-        return images
-    except Exception as e:
-        print(f"Error fetching Docker images: {e}")
-        return []
+        if not self.server_running.is_set():  # Check if the server is already running
+            self.run_image_detailer()
+
+    def run_image_detailer(self):
+        """Start the Flask server in a separate thread."""
+        if not self.server_running.is_set():  # Only start the server if it's not already running
+            self.server_thread = threading.Thread(target=self.start_flask_app)
+            self.server_thread.daemon = True  # Ensure the server thread exits when the main thread exits
+            self.server_thread.start()
+            self.server_running.set()  # Indicate that the server is now running
+            print("Flask server started.")
+
+    def start_flask_app(self):
+        """Run the Flask app."""
+        app.run(debug=False, use_reloader=False)
+
+    def stop_image_detailer(self):
+        """Stop the Flask server by sending a shutdown request."""
+        if self.server_running.is_set():
+            try:
+                requests.post('http://localhost:5000/shutdown')
+                print("Shutdown request sent to Flask server.")
+            except requests.exceptions.RequestException as e:
+                print(f"Error shutting down server: {e}")
+            finally:
+                self.server_running.clear()  # Mark the server as stopped
+
+    def closeEvent(self, event):
+        """Stop the Flask server when the GUI is closed."""
+        self.stop_image_detailer()
+        if self.server_thread is not None:
+            self.server_thread.join()  # Wait for the server thread to finish
+        event.accept()
+
+    def get_docker_images():
+        try:
+            # Run the 'docker images' command to list available images
+            result = subprocess.run(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], capture_output=True, text=True)
+            if result.returncode != 0:
+                raise Exception(f"Error fetching images: {result.stderr}")
+            
+            # Split the output by newline to create a list of images
+            images = result.stdout.splitlines()
+            return images
+        except Exception as e:
+            print(f"Error fetching Docker images: {e}")
+            return []
 
 
-def get_image_history(image_name):
-    try:
-        history_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}} {{{{.Size}}}} {{{{.CreatedAt}}}}' {image_name}"
-        history_output = subprocess.check_output(history_cmd, shell=True).decode().splitlines()
-        layers = []
-        for line in history_output:
-            parts = line.rsplit(' ', 2)
-            if len(parts) == 3:
-                command, size, created_at = parts
-                size = size.strip()  # Remove any unnecessary characters
-                layers.append({
-                    "command": command.strip(),
-                    "size": size.strip(),
-                    "created_at": created_at.strip()
-                })
+    def get_image_history(image_name):
+        try:
+            history_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}} {{{{.Size}}}} {{{{.CreatedAt}}}}' {image_name}"
+            history_output = subprocess.check_output(history_cmd, shell=True).decode().splitlines()
+            layers = []
+            for line in history_output:
+                parts = line.rsplit(' ', 2)
+                if len(parts) == 3:
+                    command, size, created_at = parts
+                    size = size.strip()  # Remove any unnecessary characters
+                    layers.append({
+                        "command": command.strip(),
+                        "size": size.strip(),
+                        "created_at": created_at.strip()
+                    })
+                else:
+                    layers.append({
+                        "command": line.strip(),
+                        "size": "N/A",
+                        "created_at": "N/A"
+                    })
+            return layers
+        except subprocess.CalledProcessError as e:
+            print(f"Error retrieving image history: {e}")
+            return None
+
+    def get_final_layer_size(image_name):
+        """Retrieve the size of the final layer in the Docker image."""
+        try:
+            history_cmd = f"docker history --no-trunc --format '{{{{.Size}}}}' {image_name}"
+            history_output = subprocess.check_output(history_cmd, shell=True).decode().splitlines()
+            if history_output:
+                return history_output[-1].strip()  # Remove any unnecessary characters
             else:
-                layers.append({
-                    "command": line.strip(),
-                    "size": "N/A",
-                    "created_at": "N/A"
-                })
-        return layers
-    except subprocess.CalledProcessError as e:
-        print(f"Error retrieving image history: {e}")
-        return None
-
-def get_final_layer_size(image_name):
-    """Retrieve the size of the final layer in the Docker image."""
-    try:
-        history_cmd = f"docker history --no-trunc --format '{{{{.Size}}}}' {image_name}"
-        history_output = subprocess.check_output(history_cmd, shell=True).decode().splitlines()
-        if history_output:
-            return history_output[-1].strip()  # Remove any unnecessary characters
-        else:
+                return "N/A"
+        except subprocess.CalledProcessError as e:
+            print(f"Error retrieving final layer size: {e}")
             return "N/A"
-    except subprocess.CalledProcessError as e:
-        print(f"Error retrieving final layer size: {e}")
-        return "N/A"
+        
+
+    def get_image_history(image_name):
+        try:
+            history_cmd = f"docker history --no-trunc --format '{{{{.CreatedBy}}}} {{{{.Size}}}} {{{{.CreatedAt}}}}' {image_name}"
+            history_output = subprocess.check_output(history_cmd, shell=True).decode().splitlines()
+            layers = []
+            for line in history_output:
+                parts = line.rsplit(' ', 2)
+                if len(parts) == 3:
+                    command, size, created_at = parts
+                    size = size.strip()  # Remove any unnecessary characters
+                    layers.append({
+                        "command": command.strip(),
+                        "size": size.strip(),
+                        "created_at": created_at.strip()
+                    })
+                else:
+                    layers.append({
+                        "command": line.strip(),
+                        "size": "N/A",
+                        "created_at": "N/A"
+                    })
+            return layers
+        except subprocess.CalledProcessError as e:
+            print(f"Error retrieving image history: {e}")
+            return None
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    """Shutdown the Flask server gracefully."""
+    func = request.environ.get('werkzeug.server.shutdown')
+    if func is None:
+        raise RuntimeError('Not running with the Werkzeug Server')
+    func()
+    return 'Server shutting down...'
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
 
 @app.route('/image', methods=['GET', 'POST'])
 def image():
@@ -75,11 +158,11 @@ def image():
         if not image_name:
             return "Image name is required", 400
 
-        layers = get_image_history(image_name)
+        layers = ImageD.get_image_history(image_name)
         if layers is None:
             return "Error retrieving image history", 500
 
-        final_layer_size = get_final_layer_size(image_name)
+        final_layer_size = ImageD.get_final_layer_size(image_name)
         if final_layer_size is None:
             final_layer_size = "N/A"
 
@@ -141,9 +224,9 @@ def image_size_breakdown():
             return "Error retrieving size breakdown", 500
 
     return render_template('image_size_breakdown.html', 
-                           image_name=image_name, 
-                           layers=layers,
-                           available_images=available_images)
+                        image_name=image_name, 
+                        layers=layers,
+                        available_images=available_images)
 
 
 @app.route('/environment_variables', methods=['GET', 'POST'])
@@ -177,9 +260,9 @@ def environment_variables():
             return "Unexpected error", 500
 
     return render_template('environment_variables.html', 
-                           image_name=image_name, 
-                           env_vars=env_vars, 
-                           available_images=available_images)
+                        image_name=image_name, 
+                        env_vars=env_vars, 
+                        available_images=available_images)
 
 @app.route('/layer_comparison', methods=['GET', 'POST'])
 def layer_comparison():
@@ -199,17 +282,17 @@ def layer_comparison():
             return "Both image names are required", 400
 
         try:
-            layers1 = get_image_history(image_name1)
-            layers2 = get_image_history(image_name2)
+            layers1 = self.get_image_history(image_name1)
+            layers2 = self.get_image_history(image_name2)
             if layers1 is None or layers2 is None:
                 return "Error retrieving image history", 500
 
             return render_template('layer_comparison.html', 
-                                   image_name1=image_name1, 
-                                   image_name2=image_name2, 
-                                   layers1=layers1, 
-                                   layers2=layers2, 
-                                   available_images=available_images)
+                                image_name1=image_name1, 
+                                image_name2=image_name2, 
+                                layers1=layers1, 
+                                layers2=layers2, 
+                                available_images=available_images)
         except Exception as e:
             print(f"Error comparing layers: {e}")
             return "Error comparing layers", 500
@@ -236,7 +319,7 @@ def interactive_visualizations():
             return "Image name is required", 400
 
         try:
-            layers = get_image_history(image_name)
+            layers = ImageD.get_image_history(image_name)
             if layers is None:
                 return "Error retrieving image history", 500
 
@@ -285,9 +368,9 @@ def interactive_visualizations():
             graph_html = pio.to_html(fig, full_html=False)
 
             return render_template('interactive_visualizations.html', 
-                                   image_name=image_name, 
-                                   plot_html=graph_html, 
-                                   available_images=available_images)
+                                image_name=image_name, 
+                                plot_html=graph_html, 
+                                available_images=available_images)
         except Exception as e:
             print(f"Error generating visualizations: {e}")
             return "Error generating visualizations", 500
@@ -331,11 +414,11 @@ def image_api():
     if not image_name:
         return jsonify({"error": "Image name is required"}), 400
 
-    layers = get_image_history(image_name)
+    layers = ImageD.get_image_history(image_name)
     if layers is None:
         return jsonify({"error": "Error retrieving image history"}), 500
 
-    final_layer_size = get_final_layer_size(image_name)
+    final_layer_size = ImageD.get_final_layer_size(image_name)
     if final_layer_size is None:
         final_layer_size = "N/A"
 
@@ -427,31 +510,64 @@ def volume_network_info():
             return "Error retrieving information", 500
 
     return render_template('volume_network_info.html', 
-                           image_name=image_name, 
-                           volumes=volumes, 
-                           networks=networks, 
-                           available_images=available_images)
+                        image_name=image_name, 
+                        volumes=volumes, 
+                        networks=networks, 
+                        available_images=available_images)
 
 
 
 def extract_volumes(image_name):
-    # Replace with real logic to extract volume information
-    return [
-        {"name": "/data", "details": "Data volume used for persistent storage."},
-        {"name": "/logs", "details": "Log volume for application logs."}
-    ]
+    try:
+        # Run docker volume ls to get a list of volumes
+        volumes_list_cmd = "docker volume ls --format '{{.Name}}'"
+        volumes_list_output = subprocess.check_output(volumes_list_cmd, shell=True).decode().splitlines()
+        
+        volumes = []
+        for volume in volumes_list_output:
+            # Run docker volume inspect to get details for each volume
+            inspect_cmd = f"docker volume inspect {volume}"
+            inspect_output = subprocess.check_output(inspect_cmd, shell=True).decode()
+            volume_info = json.loads(inspect_output)
+            if volume_info:
+                volume_details = volume_info[0]  # Inspect command returns a list
+                volumes.append({
+                    "name": volume_details['Name'],
+                    "details": f"Mountpoint: {volume_details['Mountpoint']}, Driver: {volume_details['Driver']}"
+                })
+        return volumes
+    except subprocess.CalledProcessError as e:
+        print(f"Error retrieving volume information: {e}")
+        return []
+    
 
 def extract_networks(image_name):
-    # Replace with real logic to extract network information
-    return [
-        {"name": "bridge", "details": "Default bridge network."},
-        {"name": "host", "details": "Host network for direct communication with the host."}
-    ]
+    try:
+        # Run docker network ls to get a list of networks
+        networks_list_cmd = "docker network ls --format '{{.Name}}'"
+        networks_list_output = subprocess.check_output(networks_list_cmd, shell=True).decode().splitlines()
+        
+        networks = []
+        for network in networks_list_output:
+            # Run docker network inspect to get details for each network
+            inspect_cmd = f"docker network inspect {network}"
+            inspect_output = subprocess.check_output(inspect_cmd, shell=True).decode()
+            network_info = json.loads(inspect_output)
+            if network_info:
+                network_details = network_info[0]  # Inspect command returns a list
+                networks.append({
+                    "name": network_details['Name'],
+                    "details": f"Driver: {network_details['Driver']}, Scope: {network_details['Scope']}"
+                })
+        return networks
+    except subprocess.CalledProcessError as e:
+        print(f"Error retrieving network information: {e}")
+        return []
 
 
 @app.route('/vulnerabilities', methods=['GET', 'POST'])
 def vulnerabilities():
-    available_images = get_docker_images()  # Get the list of available Docker images
+    available_images = ImageD.get_docker_images()  # Get the list of available Docker images
 
     if request.method == 'POST':
         image_name = request.form.get('image_name')
@@ -474,7 +590,5 @@ def vulnerabilities():
 
     return render_template('vulnerabilities.html', image_name=None, vulnerabilities=None, available_images=available_images)
 
-
-    
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)

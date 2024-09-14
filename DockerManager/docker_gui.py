@@ -1,25 +1,86 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QInputDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QLabel, QDialog,
-    QFileDialog, QMessageBox, QFrame, QShortcut, QDialogButtonBox, QProgressBar,
-    QProgressDialog, QGroupBox, QSizePolicy, QScrollArea, QMenu
+    QFileDialog, QMessageBox, QFrame, QShortcut, QDialogButtonBox, QAction,
+    QProgressDialog, QGroupBox, QMenu, QListWidget, QListWidgetItem , QSplitter
 )
 
-from PyQt5.QtGui import QKeySequence
-from PyQt5.QtCore import QPropertyAnimation, QRect
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtGui import QKeySequence, QFont, QColor
+from PyQt5.QtCore import QPropertyAnimation, QRect, QThread, pyqtSignal, Qt, QTimer
+
 import os
 import yaml
 import subprocess
 import docker
 from docker.errors import APIError as DockerAPIError
+import socket
+import time
+import threading
+from flask import Flask
+import requests
 
 from logs import Logger
 from docker_client import get_docker_client
 from resource_monitor import ResourceGraphWidget, ResourceMonitorThread
 from terminal_utils import terminal_emulator, open_terminal_with_command
 from swarm import SwarmManager
+from Image_detailer.app import ImageD
 
+
+class ScaleServiceThread(QThread):
+    result = pyqtSignal(str)
+
+    def __init__(self, swarm_manager, service_name, replicas):
+        super().__init__()
+        self.swarm_manager = swarm_manager
+        self.service_name = service_name
+        self.replicas = replicas
+
+
+    def run(self):
+        result = self.swarm_manager.scale_service(self.service_name, self.replicas)
+        self.result.emit(result)
+
+class DeployServiceThread(QThread):
+    result = pyqtSignal(str)
+
+    def __init__(self, swarm_manager, service_name, image_name):
+        super().__init__()
+        self.swarm_manager = swarm_manager
+        self.service_name = service_name
+        self.image_name = image_name
+
+    def run(self):
+        result = self.swarm_manager.deploy_service(self.service_name, self.image_name)
+        self.result.emit(result)
+
+
+class SwarmThread(QThread):
+    result = pyqtSignal(str)
+
+    def __init__(self, swarm_manager, action, *args):
+        super().__init__()
+        self.swarm_manager = swarm_manager
+        self.action = action
+        self.args = args
+
+    def run(self):
+        try:
+            if self.action == "initialize":
+                result = self.swarm_manager.initialize_swarm()
+            elif self.action == "leave":
+                result = self.swarm_manager.leave_swarm()
+            elif self.action == "scale":
+                result = self.swarm_manager.scale_service(*self.args)
+            elif self.action == "deploy":
+                result = self.swarm_manager.deploy_service(*self.args)
+            elif self.action == "view_nodes":
+                result = self.swarm_manager.view_nodes()
+            else:
+                result = "Invalid action."
+            self.result.emit(result)
+        except Exception as e:
+            self.result.emit(f"Error: {e}")
 
 
 class HelpDialog(QDialog):
@@ -28,13 +89,18 @@ class HelpDialog(QDialog):
         self.setWindowTitle("Help")
         self.setGeometry(150, 150, 400, 300)
 
+
         layout = QVBoxLayout()
 
         help_text = QLabel("Shortcut Keys:\n"
                            "Ctrl+1: Toggle Image Actions\n"
                            "Ctrl+2: Toggle Volume Actions\n"
                            "Ctrl+3: Toggle Network Actions\n"
-                           "Ctrl+4: Toggle Other Actions\n")
+                           "Ctrl+4: Toggle Other Actions\n"
+                           "\n"
+                           "The User can start, stop or pause containers on the container list. Find more actions under Image Actions button!\n"
+                           "Likewise Users can find buttons for volumes and networks. Under these buttons are the functions to create and list all details.\n"
+                           "Other actions button makes it possible to deploy docker-compose files, and swarms(AT YOUR OWN RISK!!). \n")
 
         layout.addWidget(help_text)
         button_box = QDialogButtonBox(QDialogButtonBox.Ok)
@@ -74,6 +140,10 @@ class DockerGui(QWidget):
         self.logger = Logger()
         self.swarm = SwarmManager(self.logger)
 
+        self.imgd = ImageD()
+        self.server_thread = None
+        self.server_running = threading.Event() 
+
         # Initialize window attributes
         self.container_window = None
         self.image_window = None
@@ -90,7 +160,33 @@ class DockerGui(QWidget):
         self.setWindowTitle("Docker Manager")
         self.setGeometry(100, 100, 800, 600)
 
-        main_layout = QVBoxLayout()
+        # Main layout now just holds the splitter
+        main_layout = QVBoxLayout()  # Main layout for the entire window
+
+        # Create a splitter to hold the left and right sections
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left layout for containers and images
+        left_widget = QWidget()  # Create a container widget for the left side
+        left_layout = QVBoxLayout(left_widget)  # Layout for the containers and images list
+
+        # Containers section
+        left_layout.addWidget(QLabel("Containers"))
+        self.container_list = QListWidget()
+        self.container_list.setMinimumWidth(200)
+        left_layout.addWidget(self.container_list)
+
+        # Images section
+        left_layout.addWidget(QLabel("Images"))
+        self.image_list = QListWidget()
+        self.image_list.setMinimumWidth(200)
+        left_layout.addWidget(self.image_list)
+
+        left_widget.setLayout(left_layout)  # Set the layout for the left widget
+
+        # Right layout for buttons, sections, and result area
+        right_widget = QWidget()  # Create a container widget for the right side
+        right_layout = QVBoxLayout(right_widget)
 
         # Create a QGroupBox to group the section buttons with padding
         section_group = QGroupBox("Actions")
@@ -116,7 +212,7 @@ class DockerGui(QWidget):
 
         # Set the layout for the section group
         section_group.setLayout(section_button_layout)
-        main_layout.addWidget(section_group)
+        right_layout.addWidget(section_group)
 
         # Populate the frames with their respective buttons and layouts
         self.populate_container_frame(self.container_frame)
@@ -124,38 +220,173 @@ class DockerGui(QWidget):
         self.populate_network_frame(self.network_frame)
         self.populate_other_frame(self.other_frame)
 
-        # Add the frames to the main layout
-        main_layout.addWidget(self.container_frame)
-        main_layout.addWidget(self.volume_frame)
-        main_layout.addWidget(self.network_frame)
-        main_layout.addWidget(self.other_frame)
+        # Add the frames to the right layout
+        right_layout.addWidget(self.container_frame)
+        right_layout.addWidget(self.volume_frame)
+        right_layout.addWidget(self.network_frame)
+        right_layout.addWidget(self.other_frame)
 
         # Add QTextEdit for output messages
         self.result_text = QTextEdit(self)
         self.result_text.setReadOnly(True)
-        main_layout.addWidget(self.result_text)
+        right_layout.addWidget(self.result_text)
 
-        # Add Help button to the bottom right
+    # Add Help and Settings buttons to the bottom right
         self.help_button = QPushButton("Help", self)
         self.help_button.clicked.connect(self.show_help_dialog)
-        self.help_button.setFixedSize(100, 30)
 
-        # Make sure the Help button is aligned to the bottom right
+        self.settings_button = QPushButton("Image Detailer", self)  
+        self.settings_button.clicked.connect(self.image_details) 
+
         help_button_layout = QHBoxLayout()
-        help_button_layout.addStretch()
+        help_button_layout.addStretch()  # Push buttons to the right
+        help_button_layout.addWidget(self.settings_button)
         help_button_layout.addWidget(self.help_button)
-        main_layout.addLayout(help_button_layout)
+        right_layout.addLayout(help_button_layout)
+
+        right_widget.setLayout(right_layout)  # Set the layout for the right widget
+
+        # Add left and right widgets to the splitter
+        splitter.addWidget(left_widget)
+        splitter.addWidget(right_widget)
+
+        # Set initial sizes for splitter panels
+        splitter.setSizes([300, 500])  # Set initial widths (left: 300px, right: 500px)
+
+        # Add the splitter to the main layout
+        main_layout.addWidget(splitter)
 
         self.setLayout(main_layout)
 
         # Add hotkeys for existing buttons
         self.add_shortcuts()
 
+        # Set up the automatic update of side panel lists using QTimer
+        self.setup_auto_refresh()
+
+         # Connect the context menu event
+        self.container_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.container_list.customContextMenuRequested.connect(self.show_context_menu)
+
+        # Populate the container and image lists initially
+        self.update_sidepanel_lists()
+
+
+    def image_details(self):
+        self.display_result("Open http://localhost:5000 for image details!")
+        
+        # Ensure the server is not already running
+        if self.server_thread is None or not self.server_thread.is_alive():
+            self.server_running.set()  # Signal the server to run
+            self.server_thread = threading.Thread(target=self.run_image_detailer)
+            self.server_thread.daemon = True  # Ensure thread doesn't block exit
+            self.server_thread.start()
+            self.logger.log_info("Server started.")
+
+    def run_image_detailer(self):
+        # Run the Flask app in a thread
+        self.imgd.run_image_detailer()
+
+    def stop_image_detailer(self):
+        # Check if the server is running and stop it
+        if self.server_running.is_set():
+            self.server_running.clear()
+            try:
+                requests.post("http://localhost:5000/shutdown")
+                self.logger.log_info("Server shutdown request sent.")
+            except requests.exceptions.ConnectionError:
+                self.logger.log_error("Server is not running or already shut down.")
+            except Exception as e:
+                self.logger.log_error(f"Error shutting down server: {e}")
+                
+            # Join the thread to ensure clean shutdown
+            if self.server_thread is not None:
+                self.server_thread.join()
+                self.logger.log_info("Server thread joined successfully.")
+
+    def closeEvent(self, event):
+        """
+        Override the close event to stop the Flask server when the GUI is closed.
+        """
+        self.stop_image_detailer()
+        event.accept()
+
+
+    def setup_auto_refresh(self):
+        """Sets up a QTimer to automatically update the side panel lists."""
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.timeout.connect(self.update_sidepanel_lists)  # Connect the timer to the update function
+        self.refresh_timer.start(5000)  # Refresh every 5000 milliseconds (5 seconds)
+
+    def update_sidepanel_lists(self):
+        """Updates the container and image lists automatically."""
+        # Clear the existing items in both container and image lists
+        self.container_list.clear()
+        self.image_list.clear()
+
+        # Fetch the latest containers and images from Docker
+        containers = self.docker_client.containers.list(all=True)  # Get all containers
+        images = self.docker_client.images.list()  # Get all images
+
+        # Update the container list
+        for container in containers:
+            container_item = QListWidgetItem(f"Container: {container.name}")
+            if container.status == 'running':
+                # Highlight running containers in green with bold font
+                container_item.setBackground(Qt.green)
+                container_item.setFont(QFont('Arial', weight=QFont.Bold))
+                container_item.setForeground(QColor('black'))
+            self.container_list.addItem(container_item)
+
+        # Update the image list
+        for image in images:
+            # Use image ID if tags are empty
+            image_tags = ', '.join(image.tags) if image.tags else image.short_id
+            image_item = QListWidgetItem(f"Image: {image_tags}")
+            self.image_list.addItem(image_item)
+
     def create_frame(self):
         frame = QFrame()
         frame.setFrameShape(QFrame.StyledPanel)
         frame.setVisible(False)
         return frame
+    
+
+    def show_context_menu(self, pos):
+        """Displays the context menu for container actions."""
+        item = self.container_list.itemAt(pos)
+        if not item:
+            return
+        
+        menu = QMenu(self)
+        start_action = QAction("Start", self)
+        stop_action = QAction("Stop", self)
+        pause_action = QAction("Pause", self)
+
+        start_action.triggered.connect(lambda: self.perform_action(item, 'start'))
+        stop_action.triggered.connect(lambda: self.perform_action(item, 'stop'))
+        pause_action.triggered.connect(lambda: self.perform_action(item, 'pause'))
+
+        menu.addAction(start_action)
+        menu.addAction(stop_action)
+        menu.addAction(pause_action)
+
+        menu.exec_(self.container_list.viewport().mapToGlobal(pos))
+
+    def perform_action(self, item, action):
+        """Performs the Docker action based on the selected item and action."""
+        container_name = item.text().replace("Container: ", "")
+        container = self.docker_client.containers.get(container_name)
+
+        if action == 'start':
+            if container.status != 'running':
+                container.start()
+        elif action == 'stop':
+            if container.status == 'running':
+                container.stop()
+        elif action == 'pause':
+            if container.status == 'running':
+                container.pause()
 
     def create_button(self, text, associated_frame):
         button = QPushButton(text, self)
@@ -367,11 +598,20 @@ class DockerGui(QWidget):
             # Create "Manage" button with related actions
             manage_button = QPushButton("Manage")
             manage_menu = QMenu(manage_button)
+            
+            # Add actions to the "Manage" menu
             manage_menu.addAction("Start", lambda c=container: self.start_container(c))
             manage_menu.addAction("Stop", lambda c=container: self.stop_container(c))
             manage_menu.addAction("Pause", lambda c=container: self.pause_container(c))
             manage_menu.addAction("Unpause", lambda c=container: self.unpause_container(c))
-            manage_menu.addAction("Remove", lambda c=container: self.remove_container(c))
+            
+            # Add "Remove" action and disable if the container is running
+            remove_action = QAction("Remove", self)
+            if container.status == 'running':
+                remove_action.setEnabled(False)  # Disable the remove action if the container is running
+            remove_action.triggered.connect(lambda c=container: self.remove_container(c))
+            manage_menu.addAction(remove_action)
+            
             manage_button.setMenu(manage_menu)
             table.setCellWidget(row, 3, manage_button)
 
@@ -936,10 +1176,22 @@ class DockerGui(QWidget):
     def remove_container(self, container):
         try:
             self.logger.log_info(f"Removing container with ID: {container.id}")
-            container.remove(force=True)
-            self.logger.log_info(f"Container '{container.name}' removed successfully.")
-            self.display_result(f"Container '{container.name}' removed successfully.")
-            self.list_containers() 
+            if container.status == 'running':
+                self.display_result(f"Container is running! Now stopping...")
+                self.stop_container_for_image(container)
+                self.stop_container(container)
+
+            if container.status != 'running':
+                container.remove(force=True)
+                self.logger.log_info(f"Container '{container.name}' removed successfully.")
+                self.display_result(f"Container '{container.name}' removed successfully.")
+                self.list_containers() 
+            else:
+                container.remove(force=True)
+                self.logger.log_info(f"Container '{container.name}' removed successfully.")
+                self.display_result(f"Container '{container.name}' removed successfully.")
+                self.list_containers() 
+                self.update_container_list()
         except docker.errors.APIError as e:
             self.logger.log_error(f"Error removing container: {e}")
 
@@ -1011,12 +1263,21 @@ class DockerGui(QWidget):
 
     def pull_image(self):
         try:
+            # Check internet connection
+            try:
+                # Attempt to connect to Google's DNS server
+                socket.create_connection(("8.8.8.8", 53), timeout=5)
+            except OSError:
+                self.display_result("No internet connection available.")
+                self.logger.log_error("No internet connection available.")
+                return
+
             # Prompt user for repository name
             repository, ok = QInputDialog.getText(self, "Pull Image", "Enter image name (e.g., 'ubuntu' or 'ubuntu:latest'):")
             
             if not ok or not repository:
-                self.display_result("Input Error", "No repository name provided.")
-                self.logger.log_error("Input Error", "No repository name provided.")
+                self.display_result("No repository name provided.")
+                self.logger.log_error("No repository name provided.")
                 return
 
             # Create and show the progress dialog
@@ -1025,7 +1286,6 @@ class DockerGui(QWidget):
             progress_dialog.setWindowModality(Qt.WindowModal)
             progress_dialog.setMinimumDuration(0)
             
-            
             # Thread to handle Docker image pulling
             self.pull_thread = PullImageThread(self.docker_client, repository)
             self.pull_thread.progress.connect(lambda message: self.update_progress(message, progress_dialog))
@@ -1033,8 +1293,8 @@ class DockerGui(QWidget):
             self.pull_thread.start()
 
         except Exception as e:
-            self.display_result("Error", f"An error occurred: {e}")
-            self.logger.log_error("Error", f"An error occurred: {e}")
+            self.display_result(f"An error occurred: {e}")
+            self.logger.log_error(f"An error occurred: {e}")
 
     def update_progress(self, message, progress_dialog):
         if "status" in message:
@@ -1429,37 +1689,67 @@ class DockerGui(QWidget):
         view_nodes_button.clicked.connect(self.view_nodes)
         layout.addWidget(view_nodes_button)
 
+        # Leave Swarm button
+        leave_swarm_button = QPushButton("Leave Swarm", dialog)
+        leave_swarm_button.clicked.connect(self.leave_swarm)
+        layout.addWidget(leave_swarm_button)
+
         dialog.setLayout(layout)
         dialog.exec_()
 
-    def initialize_swarm(self):
+    def leave_swarm(self):
         """
-        Initialize Docker Swarm.
+        Leave the Docker Swarm.
         """
-        result = self.swarm.initialize_swarm()
+        result = self.swarm.leave_swarm()
         self.display_result(result)
 
+    def run_swarm_action(self, action, *args):
+        self.thread = SwarmThread(self.swarm, action, *args)
+        self.thread.start()
+        self.thread.finished.connect(self.handle_swarm_action_result)
+
+    def handle_swarm_action_result(self):
+        # Handle the result after the thread finishes
+        pass
+
+    def initialize_swarm(self):
+        self.run_swarm_action("initialize")
+        self.display_result(f"Swarm initialized!")
+
+    def show_result_dialog(self, result):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Result")
+
+        layout = QVBoxLayout(dialog)
+
+        result_text = QTextEdit(dialog)
+        result_text.setText(result)
+        result_text.setReadOnly(True)
+        layout.addWidget(result_text)
+
+        ok_button = QPushButton("OK", dialog)
+        ok_button.clicked.connect(dialog.accept)
+        layout.addWidget(ok_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
     def deploy_service_prompt(self):
-        """
-        Show the dialog to deploy a Docker service.
-        """
         dialog = QDialog(self)
         dialog.setWindowTitle("Deploy Service")
         layout = QVBoxLayout(dialog)
         
-        # Service Name Input
         service_name_label = QLabel("Service Name:")
         service_name_input = QLineEdit(dialog)
         layout.addWidget(service_name_label)
         layout.addWidget(service_name_input)
 
-        # Image Name Input
         image_name_label = QLabel("Image Name:")
         image_name_input = QLineEdit(dialog)
         layout.addWidget(image_name_label)
         layout.addWidget(image_name_input)
 
-        # OK and Cancel buttons
         button_layout = QHBoxLayout()
         ok_button = QPushButton("Deploy", dialog)
         cancel_button = QPushButton("Cancel", dialog)
@@ -1467,43 +1757,53 @@ class DockerGui(QWidget):
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
 
-        ok_button.clicked.connect(lambda: self.deploy_service(service_name_input.text(), image_name_input.text(), dialog))
+        ok_button.clicked.connect(lambda: self.start_deploy_service(service_name_input.text(), image_name_input.text(), dialog))
         cancel_button.clicked.connect(dialog.reject)
 
         dialog.exec_()
 
-    def deploy_service(self, service_name, image_name, dialog):
-        """
-        Deploy a Docker service.
-        """
-        result = self.swarm.deploy_service(service_name, image_name)
-        self.display_result(result)
-        if "Error" not in result:
-            dialog.accept()
-        else:
-            dialog.reject()
+    def start_deploy_service(self, service_name, image_name, dialog):
+        self.deploy_thread = DeployServiceThread(self.swarm, service_name, image_name)
+        self.deploy_thread.result.connect(lambda result: self.handle_deploy_result(result, dialog))
+        self.deploy_thread.start()
+
+    def handle_deploy_result(self, result, dialog):
+        self.show_result_dialog(result)
+        dialog.accept() if "Error" not in result else dialog.reject()
+
+    def show_result_dialog(self, result):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Result")
+
+        layout = QVBoxLayout(dialog)
+
+        result_text = QTextEdit(dialog)
+        result_text.setText(result)
+        result_text.setReadOnly(True)
+        layout.addWidget(result_text)
+
+        ok_button = QPushButton("OK", dialog)
+        ok_button.clicked.connect(dialog.accept)
+        layout.addWidget(ok_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
 
     def scale_service_prompt(self):
-        """
-        Show the dialog to scale a Docker service.
-        """
         dialog = QDialog(self)
         dialog.setWindowTitle("Scale Service")
         layout = QVBoxLayout(dialog)
         
-        # Service Name Input
         service_name_label = QLabel("Service Name:")
         service_name_input = QLineEdit(dialog)
         layout.addWidget(service_name_label)
         layout.addWidget(service_name_input)
 
-        # Replicas Input
         replicas_label = QLabel("Number of Replicas:")
         replicas_input = QLineEdit(dialog)
         layout.addWidget(replicas_label)
         layout.addWidget(replicas_input)
 
-        # OK and Cancel buttons
         button_layout = QHBoxLayout()
         ok_button = QPushButton("Scale", dialog)
         cancel_button = QPushButton("Cancel", dialog)
@@ -1511,21 +1811,19 @@ class DockerGui(QWidget):
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
 
-        ok_button.clicked.connect(lambda: self.scale_service(service_name_input.text(), replicas_input.text(), dialog))
+        ok_button.clicked.connect(lambda: self.start_scale_service(service_name_input.text(), replicas_input.text(), dialog))
         cancel_button.clicked.connect(dialog.reject)
 
         dialog.exec_()
 
-    def scale_service(self, service_name, replicas, dialog):
-        """
-        Scale a Docker service.
-        """
-        result = self.swarm.scale_service(service_name, replicas)
-        self.display_result(result)
-        if "Error" not in result:
-            dialog.accept()
-        else:
-            dialog.reject()
+    def start_scale_service(self, service_name, replicas, dialog):
+        self.scale_thread = ScaleServiceThread(self.swarm, service_name, replicas)
+        self.scale_thread.result.connect(lambda result: self.handle_scale_result(result, dialog))
+        self.scale_thread.start()
+
+    def handle_scale_result(self, result, dialog):
+        self.show_result_dialog(result)
+        dialog.accept() if "Error" not in result else dialog.reject()
 
     def view_nodes(self):
         """

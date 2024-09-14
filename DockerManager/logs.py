@@ -6,7 +6,7 @@ import os
 
 
 # Configure logging
-logging.basicConfig(filename='event_log.log', level=logging.DEBUG,
+logging.basicConfig(filename='event_log.log', level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class Logger:
