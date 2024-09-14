@@ -3,6 +3,8 @@
 ## Overview
 
 The Docker Manager is a desktop application developed to facilitate Docker container management through a user-friendly graphical interface. By leveraging PyQt5 for the GUI and Docker's Python SDK for backend operations, the application provides a streamlined approach to handling Docker environments. This tool simplifies Docker management by abstracting complex command-line operations into a graphical interface, making it accessible to users of varying expertise.
+Users can start, stop and pause running containers from the main window. The collumn on the left side of the screen allows users to see which containers are runnig or stopped. Below the containers there is a section for the existing images, this area is only informative.
+Users can find two buttons on the bottom right, one for a help pop-up, and one for detailing existing images. [see below](#Docker Image Detailer)
 
 ### Key Objectives
 
@@ -11,6 +13,7 @@ The application aims to:
 - Enable real-time monitoring and management of Docker resources.
 - Simplify deployment of multi-container applications using Docker Compose.
 - Enhance user productivity by offering an easy-to-use alternative to command-line Docker management.
+
 
 ### Core Components
 
@@ -94,20 +97,64 @@ The GUI components are implemented using PyQt5 and provide the user interface fo
     - **Listing**: Lists Docker volumes and their details.
     - **Operations**: Allows for volume creation, inspection, removal, and pruning.
 
-### Application Workflow
 
-1. **Startup**:
-    - The application initializes by setting up the GUI components and backend services.
-    - It loads initial data and prepares the main application window.
+# Docker Image Detailer
 
-2. **User Interaction**:
-    - Users interact with the GUI to perform Docker operations, such as managing containers or deploying applications.
+## Overview
+This is a web-based tool designed to provide in-depth insights into Docker images. This application allows users to retrieve, analyze, and visualize various aspects of Docker images through a web interface. It is particularly useful for developers, DevOps engineers, and system administrators who need to understand the structure, configuration, and history of Docker images used in their projects.
 
-3. **Backend Processing**:
-    - Backend services like `DockerClient`, `DockerGui` and `ResourceMonitor` process the user's requests by interacting with Docker's API.
+## Features
 
-4. **Data Display**:
-    - Results from backend operations are processed and displayed in the GUI components for user interaction.
+### 1. View Image History
+- **Description**: This feature displays the detailed history of a Docker image, including the commands used to create each layer, the size of each layer, and the date when each layer was created.
+- **Use Case**: Helps users trace the origins of an image, understand the changes made over time, and troubleshoot issues related to image creation.
+
+### 2. Image Size Breakdown
+- **Description**: Provides a detailed breakdown of the sizes of each layer within a Docker image. Users can see how the size of the image is distributed across its layers.
+- **Use Case**: Useful for optimizing Docker images by identifying large layers and understanding the impact of each layer on the overall image size.
+
+### 3. Environment Variables
+- **Description**: Lists all environment variables configured in a Docker image. This includes variables set during the build process or specified in the Dockerfile.
+- **Use Case**: Allows users to review and verify environment settings, which can be critical for debugging application behavior or ensuring proper configuration.
+
+### 4. Layer Comparison
+- **Description**: Compares the layers of two Docker images side by side. This feature highlights differences in layer commands, sizes, and creation times.
+- **Use Case**: Ideal for comparing different versions of an image to understand changes and improvements, or to identify discrepancies between similar images.
+
+### 5. Interactive Visualizations
+- **Description**: Generates interactive charts and graphs to visualize the sizes of layers in a Docker image. Users can interact with these visualizations to better understand the data.
+- **Use Case**: Provides a visual representation of image sizes, making it easier to grasp complex data and identify trends or anomalies.
+
+### 6. Logs and Build Info
+- **Description**: Retrieves and displays logs related to the Docker image build process. This includes build commands, timestamps, and any relevant output.
+- **Use Case**: Helps in diagnosing build issues and understanding the build process, which is useful for troubleshooting and verifying the build steps.
+
+### 7. Inspect Image Metadata
+- **Description**: Shows detailed metadata of a Docker image, including labels, configuration settings, and other relevant properties.
+- **Use Case**: Useful for auditing and verifying image configurations, ensuring compliance with standards and best practices.
+
+### 8. Dockerfile Snippets
+- **Description**: Retrieves and displays snippets of the Dockerfile used to build the Docker image. This provides insights into the build instructions and configurations.
+- **Use Case**: Helps users understand how the image was constructed, which is valuable for documentation, reproducibility, and educational purposes.
+
+### 9. Volume and Network Information
+- **Description**: Displays information about volumes and networks associated with a Docker image. This includes details about data volumes and network configurations.
+- **Use Case**: Useful for understanding resource allocations and network setups associated with Docker images, which can impact performance and connectivity.
+
+### 10. Image Vulnerabilities
+- **Description**: Identifies and displays vulnerabilities present in a Docker image. This feature uses vulnerability databases to provide information on security issues related to the image’s components.
+- **Use Case**: Essential for security auditing and ensuring that Docker images do not contain known vulnerabilities that could compromise the system.
+
+
+## How to use
+
+### This application only works on linux systems!
+- **install** [Dependencies](#Dependencies)
+- **install** pip packages `pip install requirements.txt`
+- **run** `python main.py`
+
+
+
 
 ### Dependencies
 
@@ -115,8 +162,14 @@ The GUI components are implemented using PyQt5 and provide the user interface fo
 - **docker**: Python SDK for interacting with Docker.
 - **subprocess**: For running Docker Compose commands and handling subprocesses.
 - **logging**: For application logging and error tracking.
+- **trivy**: For vulnerability check
+
 
 ### Conclusion
 
 The Docker Manager provides a powerful and intuitive solution for managing Docker containers and resources. By integrating PyQt5 for the graphical interface and Docker's Python SDK for backend operations, the application simplifies Docker management tasks and enhances user experience. Features such as real-time resource monitoring, container and image management, and Docker Compose deployment make it a comprehensive tool for Docker users.
+
+
+
+
 
