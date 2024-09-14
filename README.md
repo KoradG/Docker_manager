@@ -28,7 +28,7 @@ Users can find two buttons on the bottom right, one for a help pop-up, and one f
 # With debian base systems:
 I believe same as with arch, only apt install instead of pacman -S. 
 
-#Other distros:
+# Other distros:
 I don't know. I use arch BTW.
 
 Run as sudo otherwise it gives segmentation fault. 
