@@ -6,6 +6,33 @@ The Docker Manager is a desktop application developed to facilitate Docker conta
 Users can start, stop and pause running containers from the main window. The collumn on the left side of the screen allows users to see which containers are runnig or stopped. Below the containers there is a section for the existing images, this area is only informative.
 Users can find two buttons on the bottom right, one for a help pop-up, and one for detailing existing images. [see below](#docker-image-detailer)
 
+
+## How to use
+
+### This application only works on linux systems!
+- **install** [Dependencies](#Dependencies)
+- **install** pip packages `pip install requirements.txt`
+- **run** `python main.py`
+In a perfect world that is how it should work...
+Install and enable docker!
+# With arch based systems:
+
+- sudo pacman -S python-pyyaml
+- sudo pacman -S python-docker
+- sudo pacman -S python-flask
+- sudo pacman -S python-numpy
+- sudo pacman -S python-pyqtgraph
+- sudo pacman -S python-plotly
+- Run as `sudo python main.py` 
+# With debian base systems:
+I believe same as with arch, only apt install instead of pacman -S. 
+
+#Other distros:
+I don't know. I use arch BTW.
+
+Run as sudo otherwise it gives segmentation fault. 
+CURRENTLY TRYING TO FIX IT
+
 ### Key Objectives
 
 The application aims to:
@@ -144,15 +171,6 @@ This is a web-based tool designed to provide in-depth insights into Docker image
 ### 10. Image Vulnerabilities
 - **Description**: Identifies and displays vulnerabilities present in a Docker image. This feature uses vulnerability databases to provide information on security issues related to the image’s components.
 - **Use Case**: Essential for security auditing and ensuring that Docker images do not contain known vulnerabilities that could compromise the system.
-
-
-## How to use
-
-### This application only works on linux systems!
-- **install** [Dependencies](#Dependencies)
-- **install** pip packages `pip install requirements.txt`
-- **run** `python main.py`
-
 
 
 
