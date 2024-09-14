@@ -13,11 +13,12 @@ Users can find two buttons on the bottom right, one for a help pop-up, and one f
 - **install** [Dependencies](#Dependencies)
 - **install** pip packages `pip install requirements.txt`
 - **run** `python main.py`
+
+-
 - In a perfect world that is how it should work...
 - 
 - Install and enable docker!
 # With arch based systems:
-
 - sudo pacman -S python-pyyaml
 - sudo pacman -S python-docker
 - sudo pacman -S python-flask
