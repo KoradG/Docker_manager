@@ -4,7 +4,7 @@
 
 The Docker Manager is a desktop application developed to facilitate Docker container management through a user-friendly graphical interface. By leveraging PyQt5 for the GUI and Docker's Python SDK for backend operations, the application provides a streamlined approach to handling Docker environments. This tool simplifies Docker management by abstracting complex command-line operations into a graphical interface, making it accessible to users of varying expertise.
 Users can start, stop and pause running containers from the main window. The collumn on the left side of the screen allows users to see which containers are runnig or stopped. Below the containers there is a section for the existing images, this area is only informative.
-Users can find two buttons on the bottom right, one for a help pop-up, and one for detailing existing images. [see below](#Docker Image Detailer)
+Users can find two buttons on the bottom right, one for a help pop-up, and one for detailing existing images. [see below](#docker-image-detailer)
 
 ### Key Objectives
 
