@@ -1,0 +1,40 @@
+2024-09-17 09:42:00,566 - logs - ERROR - No repository name provided.
+2024-09-17 09:42:00,567 - logs - ERROR - Traceback: NoneType: None
+
+2024-09-17 09:49:35,703 - logs - INFO - Server started.
+2024-09-17 09:49:35,712 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+2024-09-17 09:49:35,712 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2024-09-17 09:49:50,083 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "GET / HTTP/1.1" 200 -
+2024-09-17 09:49:50,147 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "GET /static/styles.css HTTP/1.1" 200 -
+2024-09-17 09:49:50,152 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2024-09-17 09:49:54,688 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:54] "GET / HTTP/1.1" 200 -
+2024-09-17 09:49:54,710 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:54] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+2024-09-17 09:49:57,221 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:57] "GET /images HTTP/1.1" 200 -
+2024-09-17 09:49:57,259 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:57] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+2024-09-17 09:49:59,181 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:59] "POST /image HTTP/1.1" 200 -
+2024-09-17 09:49:59,210 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:59] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
+2024-09-17 09:50:09,170 - logs - INFO - Listing all containers.
+2024-09-17 09:50:16,340 - Image_detailer.app - ERROR - Exception on /shutdown [POST]
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/site-packages/flask/app.py", line 2190, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1486, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1484, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1469, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/Docker_manager/DockerManager/Image_detailer/app.py", line 145, in shutdown
+    raise RuntimeError('Not running with the Werkzeug Server')
+RuntimeError: Not running with the Werkzeug Server
+2024-09-17 09:50:16,342 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:50:16] "[35m[1mPOST /shutdown HTTP/1.1[0m" 500 -
+2024-09-17 09:50:16,343 - logs - INFO - Server shutdown request sent.
+2024-09-17 09:50:16,343 - logs - INFO - Server thread joined successfully.
+2024-09-17 11:29:14,927 - logs - INFO - Listing all images.
+2024-09-17 11:29:20,216 - logs - INFO - Container started from image 'sha256:4fd3f4b75df372cc4fd60fd5c133c666cf4738ca0973523513f564076395f8ad'. Container ID: 505314d59d5bf386f6b6a8c47cc8ac67760bd2b7c7f75e45f9118fb100c837d6
+2024-09-17 11:29:20,216 - logs - INFO - Opening shell for container with ID: 505314d59d5bf386f6b6a8c47cc8ac67760bd2b7c7f75e45f9118fb100c837d6
