@@ -1,4 +1,4 @@
-# Docker Manager Application
+# Docker Manager
 
 ## Overview
 
@@ -9,31 +9,22 @@ Users can find two buttons on the bottom right, one for a help pop-up, and one f
 
 ## How to use
 
-### This application only works on linux systems!
+- This application only works on linux systems!
 - **install** [Dependencies](#Dependencies)
-- **install** pip packages `pip install requirements.txt`
-- **run** `python main.py`
+- **add** user to `docker` group (optional)
+- **install** pip packages `pip install -r requirements.txt`
+- **run** `python main.py` or `sudo python main.py` if didn't add user to docker group
 
--
-- In a perfect world that is how it should work...
-- 
-- Install and enable docker!
-# With arch based systems:
-- sudo pacman -S python-pyyaml
-- sudo pacman -S python-docker
-- sudo pacman -S python-flask
-- sudo pacman -S python-numpy
-- sudo pacman -S python-pyqtgraph
-- sudo pacman -S python-plotly
-- Run as `sudo python main.py` 
-# With debian base systems:
-I believe same as with arch, only apt install instead of pacman -S. 
 
-# Other distros:
-I don't know. I use arch BTW.
+### Dependencies
 
-Run as sudo otherwise it gives segmentation fault. 
-CURRENTLY TRYING TO FIX IT
+- **PyQt5**: Framework for building the graphical user interface.
+- **docker**: Python SDK for interacting with Docker.
+- **docker-compose**
+- **subprocess**: For running Docker Compose commands and handling subprocesses.
+- **logging**: For application logging and error tracking.
+- **trivy**: For vulnerability check
+
 
 ### Key Objectives
 
@@ -175,14 +166,6 @@ This is a web-based tool designed to provide in-depth insights into Docker image
 - **Use Case**: Essential for security auditing and ensuring that Docker images do not contain known vulnerabilities that could compromise the system.
 
 
-
-### Dependencies
-
-- **PyQt5**: Framework for building the graphical user interface.
-- **docker**: Python SDK for interacting with Docker.
-- **subprocess**: For running Docker Compose commands and handling subprocesses.
-- **logging**: For application logging and error tracking.
-- **trivy**: For vulnerability check
 
 
 ### Conclusion
