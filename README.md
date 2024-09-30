@@ -11,7 +11,6 @@ Users can find two buttons on the bottom right, one for a help pop-up, and one f
 
 - This application only works on linux systems!
 - **install** [Dependencies](#Dependencies)
-- Enable and start Docker `sudo systemctl enable docker && sudo systemctl start docker` 
 - **add** user to `docker` group (optional)
 - **install** pip packages `pip install -r requirements.txt`
 - **run** `python main.py` or `sudo python main.py` if didn't add user to docker group

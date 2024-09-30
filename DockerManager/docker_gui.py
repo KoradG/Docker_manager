@@ -2,7 +2,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QInputDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QLabel, QDialog,
     QFileDialog, QMessageBox, QFrame, QShortcut, QDialogButtonBox, QAction,
-    QProgressDialog, QGroupBox, QMenu, QListWidget, QListWidgetItem , QSplitter
+    QProgressDialog, QGroupBox, QMenu, QListWidget, QListWidgetItem , QSplitter,
+    QFormLayout, QSpinBox, QComboBox
 )
 
 from PyQt5.QtGui import QKeySequence, QFont, QColor
@@ -12,6 +13,7 @@ import os
 import yaml
 import subprocess
 import docker
+from docker.types import Resources
 from docker.errors import APIError as DockerAPIError
 import socket
 import time
@@ -609,7 +611,7 @@ class DockerGui(QWidget):
             remove_action = QAction("Remove", self)
             if container.status == 'running':
                 remove_action.setEnabled(False)  # Disable the remove action if the container is running
-            remove_action.triggered.connect(lambda c=container: self.remove_container(c))
+            remove_action.triggered.connect(lambda _, c=container: self.remove_container(c))
             manage_menu.addAction(remove_action)
             
             manage_button.setMenu(manage_menu)
@@ -715,10 +717,22 @@ class DockerGui(QWidget):
             push_button.clicked.connect(lambda _, i=img: self.push_image(i))
             table.setCellWidget(row, 4, push_button)  # Push
 
+            # Create the Run button
             run_button = QPushButton("Run")
             run_button.setStyleSheet(button_style)
-            run_button.clicked.connect(lambda _, i=img: self.run_image(i))
-            table.setCellWidget(row, 5, run_button)  # Run
+
+            # Create the dropdown menu
+            run_menu = QMenu()
+
+            # Add two actions (functions) to the menu
+            run_menu.addAction("Add parameters", lambda i=img: self.open_settings_dialog(i))
+            run_menu.addAction("Run", lambda i=img: self.run_image_noparams(i))
+
+            # Attach the menu to the button
+            run_button.setMenu(run_menu)
+
+            # Set the button in the table
+            table.setCellWidget(row, 5, run_button)
 
             stop_button = QPushButton("Stop")
             stop_button.setStyleSheet(button_style)
@@ -729,22 +743,196 @@ class DockerGui(QWidget):
         self.image_window.setLayout(layout)
         self.image_window.show()
 
-    def run_image(self, image):
+    def run_image_noparams(self, image):
         try:
-            # Start a container from the image
+            # Extract exposed ports from the image
+            exposed_ports = image.attrs.get('Config', {}).get('ExposedPorts', {})
+
+            # Create port mappings dynamically
+            port_bindings = {}
+            for port in exposed_ports.keys():
+                # Get the port number from the key, which looks like '80/tcp'
+                port_num = int(port.split('/')[0])  # Get the port number as integer
+                
+                # Create a binding for each exposed port
+                port_bindings[port] = ('0.0.0.0', port_num)  # Bind to all interfaces on the host
+
+            # Start a container from the image with the Docker socket binding
             container = self.docker_client.containers.run(
                 image.id,  # Use the image ID to start the container
-                detach=True,  # Run container in detached mode
-                tty=True  # Allocate a pseudo-TTY
+                network_mode="bridge",  # Use the default bridge network
+                ports=port_bindings,  # Use dynamic port bindings
+                volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'rw'}},  # Bind Docker socket
+                detach=True,  # Run the container in detached mode
             )
 
             self.logger.log_info(f"Container started from image '{image.id}'. Container ID: {container.id}")
 
-            # Open a shell in a terminal to the running container
+            # Optional: Open a shell in a terminal to the running container
             self.open_shell(container)
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error running image '{image.id}': {e}")
 
+        except docker.errors.APIError as e:
+            self.logger.log_error(f"API Error: {e}")
+        except Exception as e:
+            self.logger.log_error(f"An unexpected error occurred: {e}")
+
+
+    def open_settings_dialog(self, image):
+        dialog = QDialog()
+        dialog.setWindowTitle("Container Settings")
+
+        layout = QFormLayout()
+
+        # CPU and Memory fields
+        cpu_spinbox = QSpinBox()
+        cpu_spinbox.setRange(1, 16)  # Example range for CPU
+        layout.addRow(QLabel("CPUs:"), cpu_spinbox)
+
+        memory_spinbox = QSpinBox()
+        memory_spinbox.setRange(1, 16000)  # Memory in MB
+        layout.addRow(QLabel("Memory (MB):"), memory_spinbox)
+
+        # Ports, Volumes, Environment Variables, Command, and Restart Policy fields
+        ports_line_edit = QLineEdit()
+        layout.addRow(QLabel("Ports (e.g., 8080:80):"), ports_line_edit)
+
+        volumes_line_edit = QLineEdit()
+        layout.addRow(QLabel("Volumes (e.g., /host/path:/container/path):"), volumes_line_edit)
+
+        env_vars_line_edit = QLineEdit()
+        layout.addRow(QLabel("Environment Variables (e.g., KEY=VALUE):"), env_vars_line_edit)
+
+        command_line_edit = QLineEdit()
+        layout.addRow(QLabel("Command:"), command_line_edit)
+
+        restart_policy_combobox = QComboBox()
+        restart_policy_combobox.addItems(["no", "always", "unless-stopped", "on-failure"])
+        layout.addRow(QLabel("Restart Policy:"), restart_policy_combobox)
+
+        # OK Button to save settings and create the container
+        ok_button = QPushButton("OK")
+        ok_button.clicked.connect(lambda: self.handle_settings(dialog, image, cpu_spinbox, memory_spinbox, ports_line_edit, volumes_line_edit, env_vars_line_edit, command_line_edit, restart_policy_combobox))
+        layout.addWidget(ok_button)
+
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def handle_settings(self, dialog, image, cpu_spinbox, memory_spinbox, ports_line_edit, volumes_line_edit, env_vars_line_edit, command_line_edit, restart_policy_combobox):
+        settings = {
+            'command': self.parse_command(command_line_edit.text()),
+            'ports': self.parse_ports(ports_line_edit.text()),
+            'volumes': self.parse_volumes(volumes_line_edit.text()),
+            'env_vars': self.parse_env_vars(env_vars_line_edit.text()),
+            'restart_policy': self.parse_restart_policy(restart_policy_combobox.currentText())
+        }
+
+        # Add CPU and memory limits if set
+        if cpu_spinbox.value() > 0:
+            settings['cpu_quota'] = cpu_spinbox.value() * 100000  # Docker CPU quota calculation
+            settings['cpu_period'] = 100000  # Default period
+        if memory_spinbox.value() > 0:
+            settings['mem_limit'] = f"{memory_spinbox.value()}m"
+
+        # Create a valid container name by sanitizing the image name
+        container_name = self.sanitize_container_name(f"{image.tags[0]}_container")
+
+        # Create container with settings
+        self.container_setup(container_name, image.id, flags=settings)
+
+        dialog.close()
+
+    def sanitize_container_name(self, name):
+        # Replace invalid characters with an underscore
+        sanitized_name = ''.join(c if c.isalnum() or c in ['_', '-', '.'] else '_' for c in name)
+        
+        # Ensure the name is not empty and does not start with an invalid character
+        if not sanitized_name or not sanitized_name[0].isalnum():
+            sanitized_name = 'container_' + sanitized_name
+        
+        return sanitized_name
+
+    # Parsing functions
+    def parse_ports(self, ports_text):
+        ports = {}
+        for port_mapping in ports_text.split(','):
+            try:
+                host_port, container_port = port_mapping.split(':')
+                ports[int(container_port.strip())] = int(host_port.strip())  # Corrected to container:host format
+            except ValueError:
+                self.logger.log_error(f"Invalid port mapping: '{port_mapping}'")
+        return ports
+
+    def parse_volumes(self, volumes_text):
+        volumes = {}
+        for volume_mapping in volumes_text.split(','):
+            try:
+                host_volume, container_volume = volume_mapping.split(':')
+                volumes[host_volume.strip()] = {'bind': container_volume.strip(), 'mode': 'rw'}
+            except ValueError:
+                self.logger.log_error(f"Invalid volume mapping: '{volume_mapping}'")
+        return volumes
+
+    def parse_env_vars(self, env_vars_text):
+        env_vars = {}
+        for env_var in env_vars_text.split(','):
+            try:
+                key, value = env_var.split('=')
+                env_vars[key.strip()] = value.strip()
+            except ValueError:
+                self.logger.log_error(f"Invalid environment variable: '{env_var}'")
+        return env_vars
+
+    def parse_restart_policy(self, restart_policy_text):
+        policy_dict = {'Name': restart_policy_text}
+        if restart_policy_text == 'on-failure':
+            policy_dict['MaximumRetryCount'] = 5  # Set default retry count
+        return policy_dict
+
+    def parse_command(self, command_text):
+        return command_text.split() if command_text else None
+
+    # Container setup function
+    def container_setup(self, container_name, image_name, flags=None):
+        try:
+            self.logger.log_info(f"Creating container with name: {container_name} and image: {image_name}")
+
+            # Prepare container arguments
+            run_args = {
+                'image': image_name,
+                'detach': True,
+                'name': container_name
+            }
+
+            # Add optional arguments based on user input
+            if flags:
+                if 'command' in flags and flags['command']:
+                    run_args['command'] = flags['command']
+                if 'ports' in flags and flags['ports']:
+                    run_args['ports'] = flags['ports']
+                if 'volumes' in flags and flags['volumes']:
+                    run_args['volumes'] = flags['volumes']
+                if 'env_vars' in flags and flags['env_vars']:
+                    run_args['environment'] = flags['env_vars']
+                if 'restart_policy' in flags and flags['restart_policy']:
+                    run_args['restart_policy'] = flags['restart_policy']
+                if 'cpu_quota' in flags and 'cpu_period' in flags:
+                    run_args['cpu_quota'] = flags['cpu_quota']
+                    run_args['cpu_period'] = flags['cpu_period']
+                if 'mem_limit' in flags:
+                    run_args['mem_limit'] = flags['mem_limit']
+
+            # Log the final run arguments for debugging
+            self.logger.log_info(f"Running container with args: {run_args}")
+
+            # Create and start the container
+            container = self.docker_client.containers.run(**run_args)
+            self.logger.log_info(f"Container '{container_name}' created and started successfully.")
+            return container
+
+        except docker.errors.APIError as e:
+            self.logger.log_error(f"Error creating container: {e}")
+        except Exception as ex:
+            self.logger.log_error(f"Unexpected error: {ex}")
 
 
     def stop_container_for_image(self, image):
@@ -1175,23 +1363,12 @@ class DockerGui(QWidget):
 
     def remove_container(self, container):
         try:
-            self.logger.log_info(f"Removing container with ID: {container.id}")
-            if container.status == 'running':
-                self.display_result(f"Container is running! Now stopping...")
-                self.stop_container_for_image(container)
-                self.stop_container(container)
-
-            if container.status != 'running':
-                container.remove(force=True)
-                self.logger.log_info(f"Container '{container.name}' removed successfully.")
-                self.display_result(f"Container '{container.name}' removed successfully.")
-                self.list_containers() 
-            else:
-                container.remove(force=True)
-                self.logger.log_info(f"Container '{container.name}' removed successfully.")
-                self.display_result(f"Container '{container.name}' removed successfully.")
-                self.list_containers() 
-                self.update_container_list()
+            self.logger.log_info(f"Removing container: {container.id}")
+            container.remove(force=True)
+            self.logger.log_info(f"Container '{container.name}' removed successfully.")
+            self.display_result(f"Container '{container.name}' removed successfully.")
+            self.list_containers() 
+            self.update_sidepanel_lists()
         except docker.errors.APIError as e:
             self.logger.log_error(f"Error removing container: {e}")
 

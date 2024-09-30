@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Item Manager</title>
+</head>
+<body>
+    <h1>Welcome to the Item Manager!</h1>
+    <h2>Items:</h2>
+    <ul id="items-list"></ul>
+    <input type="text" id="item-input" placeholder="Enter item name" />
+    <button onclick="addItem()">Add Item</button>
+    
+    <script>
+        async function fetchItems() {
+            const response = await fetch('/items');
+            const items = await response.json();
+            const itemsList = document.getElementById('items-list');
+            itemsList.innerHTML = '';
+            items.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = item.name;
+                itemsList.appendChild(li);
+            });
+        }
+
+        async function addItem() {
+            const itemInput = document.getElementById('item-input');
+            const itemName = itemInput.value;
+            if (itemName) {
+                await fetch('/items', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ item: itemName })
+                });
+                itemInput.value = '';
+                fetchItems();
+            }
+        }
+
+        // Fetch items on page load
+        fetchItems();
+    </script>
+</body>
+</html>
