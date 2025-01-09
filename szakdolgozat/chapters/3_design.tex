@@ -8,7 +8,7 @@ Tesztkódok vagy automatizált tesztelési eszközök használata helyett minden
 
 \section{Az első Prototípus}
 
-Az első prototípus célja egy alapvető grafikus felület létrehozása volt, amely lehetővé teszi a Docker konténerek egyszerű kezelését, monitorozását és naplózását, minimalizálva a parancssoros beavatkozások szükségességét. 
+Az első prototípus célja egy alapvető grafikus felület létrehozása volt, amely lehetővé teszi a Docker konténerek egyszerű kezelését, monitorozását és naplózását, minimalizálva a parancssoros beavatkozások szükségességét. Ez a változat még viszonylag sok hibát produkált, így a következő lépésben bevezettem a hibakezelést.
 
 \begin{itemize}
 	\item \textbf{Konténerek listázása és állapotkezelés:} A felhasználó számára lehetőséget biztosít a program, hogy az összes helyben futó Docker konténert listázza, azok állapotát megtekintse, és a kívánt konténereken gyorsan végezhesse az alapműveleteket, mint például az indítás, leállítás, eltávolítás.
@@ -86,8 +86,8 @@ A következő lépések során tovább javítjuk az alkalmazás stabilitását, 
 	\centering
 	\begin{minipage}{0.45\textwidth}
 		\centering
-		\includegraphics[width=1\linewidth]{images/2nd_design}
-		\caption{A második tervrajz}
+		\includegraphics[width=1\linewidth]{images/0.4}
+		\caption{A második prototípus}
 		\label{fig:2nd_design}
 	\end{minipage}
 	\hfill
@@ -100,14 +100,46 @@ A következő lépések során tovább javítjuk az alkalmazás stabilitását, 
 \end{figure}
 
 
+
+
+Ez a prototípus már több Docker funkciót támogatott, ezért a felületen új gombok kaptak helyet. A kinézet nem felhasználóbarát, viszont tesztelésre alkalmas volt. Itt már majdnem minden Docker funkciót képes volt kezelni. 
+
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.7\linewidth]{images/0.4}
-	\caption{Megvalósított kinézet}
-	\label{fig:0.4}
+	 \includegraphics[scale=0.3]{images/0.5}
+	 \caption{Új felület Docker-Compose támogatással}
+	 \label{fig:0.5}
 \end{figure}
 
-\subsection{Osztályok kapcsolata}
-**UML DIAGRAM PLACEHOLDER**
+A következő prototípusokban az előforduló hibák javítására, és a grafikus felület alakítására koncentráltam. 
+A kinézet számos változtatáson ment keresztül, mire eljutott a végső állapotra. Miközben hasonló célú alkalmazásokat használtam arra jöttem rá, hogy színeket kell vinni a felületbe, ettől élénkebbnek és barátságosabbnak tűnik az egész program, így a felhasználók is szívesebben használják az alkalmazást. Ezeket a szempontokat figyelembe véve készült el a felület végső változata.
+\newpage
+\subsection{Végső megoldás}
+\begin{figure}[H]
+	\centering
+	\includegraphics[scale=.55]{images/final}
+	\caption{Fő ablak}
+	\label{fig:final}
+\end{figure}
+Ez a megoldás már sokkal tetszetősebb mint a korábbiak, a funkció gombokat csoportosítva lenyíló menükbe rendeztem, ezzel a zsúfoltságot megszüntetve. Az ablak bal oldali oszlopa gyors elérést biztosít a konténerek kezeléséhez, például futtatás, törlés, ez jobb egérgomb segítségével lehetséges. Illetve alatta egy lista a letöltött képekről, ez csak informatív jellegű, Docker képek kezelése a lista ablakból lehetséges.  
+\begin{figure}[H]
+	\centering
+	\includegraphics[scale=0.3]{images/final_image-list}
+	\caption{Képek kezelése}
+	\label{final}
+\end{figure}
+
+Az ábrán látható egy Docker kép indítása, a program lehetővé teszi az alapértelmezett vagy kézzel megadott paraméterekkel való indítást.
+\newpage
+A funkciók mennyisége miatt a konténer lista ablakban is csoportosítottam a gombokat az alábbi ábra szerint.
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[scale=0.45]{images/final_list-template}
+	\caption{Konténerek kezelése}
+	\label{final}
+\end{figure}
+ 
+A sablon közel megegyező a képek listájával, viszont mivel kép egy indítása konténer képzést eredményez, erre az ablakra nagyobb hangsúlyt fektettem. Minden konténer három legördülő menüből kezelhető; első az indítás, törlés, szünetelés és hasonló parancsoknak, a másodikban találjuk például a konténer terminálját, a harmadikból tudjuk többek közt ellenőrizni a konténer erőforrás használatát.
 
 

@@ -18,8 +18,17 @@ A Docker egyik legfontosabb előnye, hogy lehetővé teszi a konténerek gyors e
 
 \textbf{Docker Compose} eszközzel pedig könnyen kezelhetjük több konténerből álló alkalmazásokat, definiálhatjuk a konténerek közötti kapcsolatokat és beállíthatjuk a szükséges környezetváltozókat, fájlokat és hálózati beállításokat. Ezzel a megoldással képesek vagyunk teljes alkalmazásokat futtatni több különálló konténerben, mint például egy webalkalmazást egy adatbázissal, anélkül, hogy bonyolult konfigurációkat kellene kezelni.
 
+\section{A virtualizáció}
+A virtualizáció olyan technológia, amely lehetővé teszi a számítógépes erőforrások, mint a processzor, memória, tároló és hálózati eszközök hatékony kihasználását és szétosztását több független környezet között. A virtualizáció révén egyetlen fizikai gépen több virtuális gép (VM) vagy konténer futhat, amelyek külön operációs rendszert és alkalmazásokat is futtathatnak. A virtualizáció alapvetően két fő típust ölel fel: az 1. típusú (bare-metal) és a 2. típusú (hosted) virtualizációt. Ezen kívül létezik a konténer-alapú virtualizáció, amely a Docker révén vált népszerűvé.
 
 
+\textbf{1. Típusú virtualizáció (Bare-metal virtualizáció)}: A 1. típusú virtualizáció esetén a virtualizációs szoftver közvetlenül a fizikai hardveren fut, és nem szükséges egy operációs rendszer a futtatásához. Ezáltal a virtualizációs réteg közvetlen hozzáférést biztosít a hardverhez, így jobb teljesítményt és hatékonyabb erőforrás-kihasználást kínál. A 1. típusú virtualizációhoz tartozó rendszerek például a VMware ESXi, Microsoft Hyper-V vagy Xen.
+
+\textbf{2. Típusú virtualizáció (Hosted virtualizáció)}: A 2. típusú virtualizáció egy operációs rendszeren belül futó virtualizációs réteget használ. Ez azt jelenti, hogy a virtualizációs szoftver egy meglévő operációs rendszer (pl. Linux vagy Windows) felett működik, és az operációs rendszer biztosítja az erőforrásokat a virtualizációs réteg számára. Bár a 2. típusú virtualizáció könnyebben beállítható és rugalmasabb, a teljesítménye általában alacsonyabb, mint az 1. típusú virtualizációé. Ilyen példák a VMware Workstation, Oracle VirtualBox vagy Parallels Desktop.
+
+\textbf{Docker és a virtualizáció}: A Docker a konténer-alapú virtualizációt képviseli, amely eltér a hagyományos 1. és 2. típusú virtualizációtól. A Docker konténerek az operációs rendszeren belül, annak erőforrásait használva futnak, de nem igényelnek teljes virtuális gépet, így sokkal könnyebbek és gyorsabbak. A Docker lehetővé teszi a különböző alkalmazások izolálását ugyanazon operációs rendszer keretein belül, de anélkül, hogy teljes virtuális gépeket kellene futtatni. Ez a megoldás ideális a mikroszolgáltatások, DevOps és folyamatos integrációs (CI) rendszerek számára.
+
+\newpage
 \section{Docker alapfogalmak}
 
 A Docker alapfogalmai közé tartoznak a következők:
@@ -243,6 +252,3 @@ A \textbf{LazyDocker} egy minimalista, terminál-alapú felületet kínál, amel
 
 \textbf{Alkalmazási területek}:
 A LazyDocker hasznos eszköz fejlesztők számára, akik parancssori környezetben dolgoznak, és vizuálisan is átláthatóbbá szeretnék tenni a Docker parancsokat. Ideális kisebb fejlesztési környezetekben, ahol gyorsan szükséges kezelni a konténereket és erőforrás-felhasználási statisztikákat.
-
-
-
