@@ -1,73 +1,109 @@
-import numpy as np
-import pyqtgraph as pg
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import QThread, pyqtSignal
-import docker
 import logging
+import collections
+import time
+import docker
 
-# Configure logging
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 
-logging.basicConfig(filename='monitor_log.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    _handler = logging.FileHandler('monitor_log.log')
+    _handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    logger.addHandler(_handler)
+
+# How many data points to keep visible
+HISTORY = 60
 
 
 class ResourceGraphWidget(QWidget):
     def __init__(self, container_name):
         super().__init__()
         self.container_name = container_name
-        self.initUI()
 
-    def initUI(self):
-        self.setWindowTitle(f"Resource Usage for {self.container_name}")
-        self.setGeometry(100, 100, 800, 600)
-        layout = QVBoxLayout()
+        self.cpu_data  = collections.deque([0.0] * HISTORY, maxlen=HISTORY)
+        self.ram_data  = collections.deque([0.0] * HISTORY, maxlen=HISTORY)
+        self.disk_data = collections.deque([0.0] * HISTORY, maxlen=HISTORY)
+        self.xs = list(range(HISTORY))
 
-        self.cpu_plot = pg.PlotWidget()
-        self.memory_plot = pg.PlotWidget()
-        self.disk_plot = pg.PlotWidget()
+        self._setup_ui()
 
-        layout.addWidget(self.cpu_plot)
-        layout.addWidget(self.memory_plot)
-        layout.addWidget(self.disk_plot)
+    def _setup_ui(self):
+        self.setWindowTitle(f"Resource Monitor – {self.container_name}")
+        self.setMinimumSize(800, 560)
 
-        self.setLayout(layout)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
 
-        self.cpu_curve = self.cpu_plot.plot(pen='r', name='CPU Usage (%)')
-        self.memory_curve = self.memory_plot.plot(pen='g', name='Memory Usage (MB)')
-        self.disk_curve = self.disk_plot.plot(pen='b', name='Disk Usage (MB)')
+        title = QLabel(f"📊  {self.container_name}")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet(
+            "color: #4fc3f7; font-size: 14px; font-weight: bold; padding: 4px;"
+        )
+        layout.addWidget(title)
 
-        self.cpu_data = []
-        self.memory_data = []
-        self.disk_data = []
-        self.timestamps = []
+        # Dark matplotlib figure with three subplots
+        self.figure = Figure(figsize=(8, 6), facecolor='#1e1e1e')
+        self.figure.subplots_adjust(hspace=0.45, left=0.08, right=0.97,
+                                    top=0.93, bottom=0.07)
 
-    def update_graph(self, cpu_usage, memory_usage, disk_usage):
-        try:
-            self.cpu_data.append(cpu_usage)
-            self.memory_data.append(memory_usage)
-            self.disk_data.append(disk_usage)
-            self.timestamps.append(len(self.timestamps) + 1)
+        self.ax_cpu  = self.figure.add_subplot(3, 1, 1)
+        self.ax_ram  = self.figure.add_subplot(3, 1, 2)
+        self.ax_disk = self.figure.add_subplot(3, 1, 3)
 
-            self.cpu_curve.setData(self.timestamps, self.cpu_data)
-            self.memory_curve.setData(self.timestamps, self.memory_data)
-            self.disk_curve.setData(self.timestamps, self.disk_data)
+        for ax, title_text, color, ylabel in [
+            (self.ax_cpu,  'CPU Usage',    '#4fc3f7', '%'),
+            (self.ax_ram,  'RAM Usage',    '#4ec9b0', 'MB'),
+            (self.ax_disk, 'Disk Usage',   '#dcdcaa', 'MB'),
+        ]:
+            ax.set_facecolor('#141414')
+            ax.set_title(title_text, color=color, fontsize=9, pad=3)
+            ax.set_ylabel(ylabel, color='#9d9d9d', fontsize=8)
+            ax.tick_params(colors='#6a6a6a', labelsize=7)
+            ax.spines['bottom'].set_color('#3a3a3a')
+            ax.spines['top'].set_color('#3a3a3a')
+            ax.spines['left'].set_color('#3a3a3a')
+            ax.spines['right'].set_color('#3a3a3a')
+            ax.set_xlim(0, HISTORY - 1)
+            ax.grid(True, color='#2a2a2a', linewidth=0.5)
 
-            self.cpu_plot.setLabel('left', 'CPU Usage (%)')
-            self.cpu_plot.setLabel('bottom', 'Time')
-            self.cpu_plot.addLegend()
+        self.line_cpu,  = self.ax_cpu.plot(
+            self.xs, list(self.cpu_data),  color='#4fc3f7', linewidth=1.2)
+        self.line_ram,  = self.ax_ram.plot(
+            self.xs, list(self.ram_data),  color='#4ec9b0', linewidth=1.2)
+        self.line_disk, = self.ax_disk.plot(
+            self.xs, list(self.disk_data), color='#dcdcaa', linewidth=1.2)
 
-            self.memory_plot.setLabel('left', 'Memory Usage (MB)')
-            self.memory_plot.setLabel('bottom', 'Time')
-            self.memory_plot.addLegend()
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setStyleSheet("background: #1e1e1e;")
+        layout.addWidget(self.canvas)
 
-            self.disk_plot.setLabel('left', 'Disk Usage (MB)')
-            self.disk_plot.setLabel('bottom', 'Time')
-            self.disk_plot.addLegend()
+    def update_graph(self, cpu: float, ram: float, disk: float):
+        """Slot – receives (cpu%, ram_mb, disk_mb) from ResourceMonitorThread."""
+        self.cpu_data.append(cpu)
+        self.ram_data.append(ram)
+        self.disk_data.append(disk)
 
-           # logger.info(f"Updated graphs: CPU Usage={cpu_usage}%, Memory Usage={memory_usage}MB, Disk Usage={disk_usage}MB")
-        except Exception as e:
-            logger.error(f"Error updating graphs: {e}")
+        data_y = list(self.cpu_data)
+        self.line_cpu.set_ydata(data_y)
+        self.ax_cpu.set_ylim(0, max(max(data_y) * 1.2, 5))
+
+        data_y = list(self.ram_data)
+        self.line_ram.set_ydata(data_y)
+        self.ax_ram.set_ylim(0, max(max(data_y) * 1.2, 10))
+
+        data_y = list(self.disk_data)
+        self.line_disk.set_ydata(data_y)
+        self.ax_disk.set_ylim(0, max(max(data_y) * 1.2, 10))
+
+        self.canvas.draw_idle()
+
 
 class ResourceMonitorThread(QThread):
     update_graph = pyqtSignal(float, float, float)
@@ -75,37 +111,38 @@ class ResourceMonitorThread(QThread):
     def __init__(self, container):
         super().__init__()
         self.container = container
-        self.client = docker.from_env()
+        self._running = True
 
     def run(self):
         prev_cpu = None
         prev_system = None
 
-        while True:
+        while self._running:
             try:
-                # Check if the container is running
-                container_state = self.container.attrs['State']['Status']
-                if container_state != 'running':
-                    logger.info(f"Container {self.container.name} is not running. Skipping stats collection.")
+                self.container.reload()
+                if self.container.status != 'running':
                     self.update_graph.emit(0.0, 0.0, 0.0)
-                    self.sleep(1)
+                    time.sleep(1)
                     break
-                
+
                 stats = self.container.stats(stream=False)
-                cpu_stats = stats.get('cpu_stats', {})
+
+                if not stats:
+                    time.sleep(1)
+                    continue
+
+                cpu_stats    = stats.get('cpu_stats', {})
                 precpu_stats = stats.get('precpu_stats', cpu_stats)
 
-                cpu_total = cpu_stats.get('cpu_usage', {}).get('total_usage', 0)
+                cpu_total  = cpu_stats.get('cpu_usage', {}).get('total_usage', 0)
                 cpu_system = cpu_stats.get('system_cpu_usage', 0)
-                precpu_total = precpu_stats.get('cpu_usage', {}).get('total_usage', 0)
-                precpu_system = precpu_stats.get('system_cpu_usage', 0)
 
-                num_cpus = len(cpu_stats.get('cpu_usage', {}).get('percpu_usage', [1]))
+                percpu = cpu_stats.get('cpu_usage', {}).get('percpu_usage')
+                num_cpus = len(percpu) if percpu else 1
 
                 if prev_cpu is not None and prev_system is not None:
-                    cpu_delta = cpu_total - prev_cpu
+                    cpu_delta    = cpu_total  - prev_cpu
                     system_delta = cpu_system - prev_system
-
                     if system_delta > 0 and cpu_delta > 0:
                         cpu_usage = (cpu_delta / system_delta) * num_cpus * 100.0
                     else:
@@ -113,45 +150,42 @@ class ResourceMonitorThread(QThread):
                 else:
                     cpu_usage = 0.0
 
-                prev_cpu = cpu_total
+                prev_cpu    = cpu_total
                 prev_system = cpu_system
 
-                memory_usage_bytes = stats.get('memory_stats', {}).get('usage', 0)
-                memory_usage_mb = memory_usage_bytes / (1024 * 1024)
-                
-                disk_usage_mb = self.get_disk_usage()
+                mem_stats = stats.get('memory_stats', {})
+                cache     = mem_stats.get('stats', {}).get('cache', 0)
+                ram_bytes = mem_stats.get('usage', 0) - cache
+                ram_mb    = ram_bytes / (1024 * 1024)
 
-                self.update_graph.emit(cpu_usage, memory_usage_mb, disk_usage_mb)
-            except KeyError as e:
-                self.logger.warning(f"KeyError while fetching stats: {e}")
-                self.update_graph.emit(0.0, 0.0, 0.0)
+                disk_mb = self._get_disk_usage(stats)
+
+                self.update_graph.emit(cpu_usage, ram_mb, disk_mb)
+
             except docker.errors.APIError as e:
-                self.logger.error(f"APIError while fetching stats: {e}")
+                logger.error(f"APIError fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
             except Exception as e:
-                self.logger.error(f"Unexpected error while fetching stats: {e}")
+                logger.error(f"Unexpected error fetching stats: {e}")
                 self.update_graph.emit(0.0, 0.0, 0.0)
 
-            self.sleep(1)
+            time.sleep(1)
 
-    def get_disk_usage(self):
+    def stop(self):
+        self._running = False
+
+    def _get_disk_usage(self, stats: dict) -> float:
         try:
-            exec_id = self.client.api.exec_create(self.container.id, ['df', '-h'])
-            output = self.client.api.exec_start(exec_id, stream=False)
-            output = output.decode('utf-8')
-            
-            lines = output.splitlines()
-            if len(lines) > 1:
-                usage_info = lines[1].split()
-                if len(usage_info) >= 5:
-                    used_space = usage_info[2]
-                    #logger.info(f"Disk usage: {used_space}")
-                    return float(used_space.replace('G', '').replace('M', ''))  # Simplified, needs proper parsing
-            return 0.0
+            storage = stats.get('storage_stats', {})
+            used = storage.get('read_write_layer', None)
+            if used is None:
+                blkio = stats.get('blkio_stats', {})
+                io_service = blkio.get('io_service_bytes_recursive') or []
+                write_bytes = sum(
+                    e.get('value', 0) for e in io_service if e.get('op', '').lower() == 'write'
+                )
+                return write_bytes / (1024 * 1024)
+            return used / (1024 * 1024)
         except Exception as e:
-            if "409" in str(e):
-                logger.info(f"Container {self.container.id} is not running!")
-                return 0.0
-            else:
-                logger.error(f"Error occurred while getting disk usage: {e}")
-                return 0.0
+            logger.error(f"Disk usage error: {e}")
+            return 0.0

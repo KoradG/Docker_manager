@@ -1,21 +1,22 @@
 # logs.py
 import logging
 import traceback
-import sys
 import os
 
 
 # Configure logging
-logging.basicConfig(filename='event_log.log', level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    filename='event_log.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 
 class Logger:
     def __init__(self):
-        # Initialize the logger
-        self.find_folder
         self.logger = logging.getLogger(__name__)
+        self.find_folder()   # FIX: was self.find_folder without parentheses – never called
 
-        
     def find_folder(self):
         """Check if the 'logs' folder exists; create it if it does not."""
         logs_folder = 'logs'
@@ -34,14 +35,3 @@ class Logger:
 
     def log_debug(self, message):
         self.logger.debug(message)
-
-
-    def handle_docker_api_error(func):
-        """Decorator to handle Docker API errors."""
-        def wrapper(self, *args, **kwargs):
-            try:
-                return func(self, *args, **kwargs)
-            except docker.errors.APIError as e:
-                self.log_error(f"Error in {func.__name__}: {e}")
-                raise DockerClientError(f"Error in {func.__name__}.") from e
-        return wrapper

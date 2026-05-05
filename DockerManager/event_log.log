@@ -1,40 +1,986 @@
-2024-09-17 09:42:00,566 - logs - ERROR - No repository name provided.
-2024-09-17 09:42:00,567 - logs - ERROR - Traceback: NoneType: None
+2026-05-05 12:57:19,909 - logs - INFO - 'logs' folder created.
+2026-05-05 12:57:23,476 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 12:57:24,670 - logs - INFO - Started: debian_trixie-backports_keepalive
+2026-05-05 12:57:30,729 - logs - INFO - Selected: debian-test  [exited]
+2026-05-05 12:57:31,743 - logs - INFO - Selected: debian_trixie-backports_keepalive  [running]
+2026-05-05 12:57:32,769 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:34,789 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:36,807 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:38,827 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:40,846 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:42,864 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:44,882 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:46,901 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:48,920 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:50,940 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:52,958 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:54,975 - resource_monitor - ERROR - Disk usage error: 'NoneType' object is not iterable
+2026-05-05 12:57:55,427 - logs - INFO - Stopped: debian_trixie-backports_keepalive
+2026-05-05 13:03:08,827 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:03:49,287 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:03:52,067 - logs - INFO - Podman kapcsolódás sikertelen:
+Podman socket nem található. Ellenőrizd, hogy a Podman daemon fut-e:
+  Linux:  systemctl --user start podman.socket
+  macOS:  podman machine start
+  Win:    podman machine start
+2026-05-05 13:03:56,947 - logs - INFO - Podman kapcsolódás sikertelen:
+Podman socket nem található. Ellenőrizd, hogy a Podman daemon fut-e:
+  Linux:  systemctl --user start podman.socket
+  macOS:  podman machine start
+  Win:    podman machine start
+2026-05-05 13:04:59,564 - logs - INFO - Podman hiba: Error while fetching server API version: ('Connection aborted.', PermissionError(13, 'Engedély megtagadva'))
+2026-05-05 13:05:14,360 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:05:17,658 - logs - INFO - Podman hiba: Error while fetching server API version: ('Connection aborted.', PermissionError(13, 'Engedély megtagadva'))
+2026-05-05 13:07:59,796 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:08:03,851 - logs - INFO - Podman kapcsolódás sikertelen:
+A rootful socket root jogot igényel: /run/podman/podman.sock
+  Használj rootless Podmant (ajánlott):
+    systemctl --user start podman.socket
+  Vagy add hozzá a felhasználódat a 'podman' csoporthoz:
+    sudo usermod -aG podman $USER  &&  newgrp podman
+2026-05-05 13:11:02,924 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:11:07,867 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:11:07,871 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:11:07,871 - logs - INFO - ⚠  Compose nem érhető el. Telepítés: pip install podman-compose
+2026-05-05 13:11:28,634 - logs - INFO - Backend: Docker
+2026-05-05 13:11:47,636 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:11:52,903 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:11:52,906 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:18:14,799 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:18:19,131 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:18:19,135 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:18:27,408 - logs - INFO - Backend: Docker
+2026-05-05 13:18:31,805 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:18:31,805 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:18:37,050 - logs - INFO - Starting pull…
+2026-05-05 13:18:39,774 - logs - INFO - Pulling fs layer
+2026-05-05 13:18:40,775 - logs - INFO - Downloading 55%
+2026-05-05 13:18:42,633 - logs - INFO - Download complete
+2026-05-05 13:18:42,633 - logs - INFO - Pulling fs layer
+2026-05-05 13:18:42,642 - logs - INFO - Download complete
+2026-05-05 13:18:42,662 - logs - INFO - Download complete
+2026-05-05 13:18:42,662 - logs - INFO - Pull complete!
+2026-05-05 13:18:46,902 - logs - INFO - Started keep-alive container 'docker.io_library_debian_latest_keepalive' (686ba871bd5d)
+2026-05-05 13:18:55,472 - logs - INFO - Selected: docker.io_library_debian_latest_keepalive  [running]
+2026-05-05 13:19:18,430 - logs - INFO - Backend: Docker
+2026-05-05 13:19:22,333 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:19:22,333 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:19:28,130 - logs - INFO - ── Inspect: docker.io_library_debian_latest_keepalive ──
+{
+  "Id": "686ba871bd5dddebe5e3e205a9cd9fb456b44b7d8fd2de68706c7a2e3591a001",
+  "Created": "2026-05-05T11:18:46.529905234Z",
+  "Path": "sleep",
+  "Args": [
+    "infinity"
+  ],
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 130928,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-05-05T11:18:46.896880368Z",
+    "FinishedAt": "0001-01-01T00:00:00Z"
+  },
+  "Image": "sha256:53cc69728d63af28554cb86e46f530b97caab0697910c50ee8524edf098ddbce",
+  "ResolvConfPath": "/run/user/1000/containers/overlay-containers/686ba871bd5dddebe5e3e205a9cd9fb456b44b7d8fd2de68706c7a2e3591a001/userdata/resolv.conf",
+  "HostnamePath": "/run/user/1000/containers/overlay-containers/686ba871bd5dddebe5e3e205a9cd9fb456b44b7d8fd2de68706c7a2e3591a001/userdata/hostname",
+  "HostsPath": "/run/user/1000/containers/overlay-containers/686ba871bd5dddebe5e3e205a9cd9fb456b44b7d8fd2de68706c7a2e3591a001/userdata/hosts",
+  "LogPath": "",
+  "Name": "/docker.io_library_debian_latest_keepalive",
+  "RestartCount": 0,
+  "Driver": "overlay",
+  "Platform": "linux",
+  "MountLabel": "",
+  "ProcessLabel": "",
+  "AppArmorProfile": "",
+  "ExecIDs": [
+    "14fad45e4e5f84a6bc1d6bdf636905d7049f0a1114d03ce0e57754b4010a937f"
+  ],
+  "HostConfig": {
+    "Binds": [],
+    "ContainerIDFile": "",
+    "LogConfig": {
+      "Type": "journald",
+      "Config": null
+    },
+    "NetworkMode": "bridge",
+    "PortBindings": {},
+    "RestartPolicy": {
+      "Name": "no",
+      "MaximumRetryCount": 0
+    },
+    "AutoRemove": false,
+    "VolumeDriver": "",
+    "VolumesFrom": null,
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "Annotations": {
+      "io.container.manager": "libpod",
+      "org.opencontainers.image.stopSignal": "15",
+      "org.systemd.property.KillSignal": "15",
+      "org.systemd.property.TimeoutStopUSec": "uint64 10000000"
+    },
+    "CapAdd": [],
+    "CapDrop": [],
+    "CgroupnsMode": "private",
+    "Dns": [],
+    "DnsOptions": [],
+    "DnsSearch": [],
+    "ExtraHosts": [],
+    "GroupAdd": [],
+    "IpcMode": "shareable",
+    "Cgroup": "",
+    "Links": null,
+    "OomScoreAdj": 200,
+    "PidMode": "private",
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyRootfs": false,
+    "SecurityOpt": [],
+    "UTSMode": "private",
+    "UsernsMode": "",
+    "ShmSize": 65536000,
+    "Runtime": "oci",
+    "Isolation": "",
+    "CpuShares": 0,
+    "Memory": 0,
+    "NanoCpus": 0,
+    "CgroupParent": "user.slice",
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": null,
+    "BlkioDeviceReadBps": null,
+    "BlkioDeviceWriteBps": null,
+    "BlkioDeviceReadIOps": null,
+    "BlkioDeviceWriteIOps": null,
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "Devices": [],
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "MemoryReservation": 0,
+    "MemorySwap": 0,
+    "MemorySwappiness": 0,
+    "OomKillDisable": false,
+    "PidsLimit": 2048,
+    "Ulimits": [
+      {
+        "Name": "RLIMIT_NOFILE",
+        "Hard": 524288,
+        "Soft": 524288
+      },
+      {
+        "Name": "RLIMIT_NPROC",
+        "Hard": 62843,
+        "Soft": 62843
+      }
+    ],
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "IOMaximumIOps": 0,
+    "IOMaximumBandwidth": 0,
+    "MaskedPaths": null,
+    "ReadonlyPaths": null
+  },
+  "GraphDriver": {
+    "Data": {
+      "LowerDir": "/home/gyuri/.local/share/containers/storage/overlay/838e471be07892110fe998f879652b240b92fb1ad5cb4a91a39e8c4c9ddc94e0/diff",
+      "MergedDir": "/home/gyuri/.local/share/containers/storage/overlay/b0e0e3586324d397d3278f6cbc999944ac100aa9b95d6c878703c8e9af36bd96/merged",
+      "UpperDir": "/home/gyuri/.local/share/containers/storage/overlay/b0e0e3586324d397d3278f6cbc999944ac100aa9b95d6c878703c8e9af36bd96/diff",
+      "WorkDir": "/home/gyuri/.local/share/containers/storage/overlay/b0e0e3586324d397d3278f6cbc999944ac100aa9b95d6c878703c8e9af36bd96/work"
+    },
+    "Name": "overlay"
+  },
+  "SizeRootFs": 0,
+  "Mounts": [],
+  "Config": {
+    "Hostname": "686ba871bd5d",
+    "Domainname": "",
+    "User": "",
+    "AttachStdin": false,
+    "AttachStdout": false,
+    "AttachStderr": false,
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "container=podman",
+      "HOME=/root",
+      "HOSTNAME=686ba871bd5d"
+    ],
+    "Cmd": [
+      "sleep",
+      "infinity"
+    ],
+    "Image": "docker.io/library/debian:latest",
+    "Volumes": null,
+    "WorkingDir": "/",
+    "Entrypoint": [],
+    "OnBuild": null,
+    "Labels": {},
+    "StopSignal": "15",
+    "StopTimeout": 10
+  },
+  "NetworkSettings": {
+    "Bridge": "",
+    "SandboxID": "",
+    "SandboxKey": "/run/user/1000/netns/netns-3d8138ef-fe06-e69b-89de-5e197cdb0407",
+    "Ports": {},
+    "HairpinMode": false,
+    "LinkLocalIPv6Address": "",
+    "LinkLocalIPv6PrefixLen": 0,
+    "SecondaryIPAddresses": null,
+    "SecondaryIPv6Addresses": null,
+    "EndpointID": "",
+    "Gateway": "10.88.0.1",
+    "GlobalIPv6Address": "",
+    "GlobalIPv6PrefixLen": 0,
+    "IPAddress": "10.88.0.2",
+    "IPPrefixLen": 16,
+    "IPv6Gateway": "",
+    "MacAddress": "26:94:d1:de:08:95",
+    "Networks": {
+      "podman": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": [
+          "686ba871bd5d"
+        ],
+        "MacAddress": "26:94:d1:de:08:95",
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "2f259bab93aaaaa2542ba43ef33eb990d0999ee1b9924b557b7be53c0b7a1bb9",
+        "EndpointID": "",
+        "Gateway": "10.88.0.1",
+        "IPAddress": "10.88.0.2",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  }
+}
+2026-05-05 13:19:32,247 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:33,269 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:34,287 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:35,309 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:36,327 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:37,345 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:38,367 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:39,388 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:40,406 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:41,424 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 13:19:42,379 - logs - INFO - Stopped: docker.io_library_debian_latest_keepalive
+2026-05-05 13:19:48,837 - logs - INFO - Backend: Docker
+2026-05-05 13:19:54,279 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:19:54,279 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:20:19,127 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:20:37,946 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:20:37,950 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:20:54,215 - logs - INFO - Backend: Docker
+2026-05-05 13:23:10,999 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:23:10,999 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:24:01,997 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:24:41,761 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:24:41,764 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:27:49,448 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:28:12,006 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:28:12,011 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:32:24,689 - logs - INFO - 'logs' folder already exists.
+2026-05-05 13:35:41,337 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 13:35:41,343 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 13:36:27,435 - logs - INFO - Backend: Docker
+2026-05-05 14:30:21,104 - logs - INFO - 'logs' folder already exists.
+2026-05-05 14:30:33,331 - logs - INFO - No container selected.
+2026-05-05 14:30:35,346 - logs - INFO - Selected: portainer  [created]
+2026-05-05 14:30:39,441 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 14:30:41,236 - logs - INFO - Selected: portainer  [created]
+2026-05-05 14:30:42,833 - logs - INFO - Error starting: 500 Server Error for http+docker://localhost/v1.54/containers/37b1e1abc9a8efe4789a840196728b9fc61b1cb7c19df45b02cf936a32c46610/start: Internal Server Error ("failed to create task for container: failed to start shim: start failed: failed to create TTRPC connection: unsupported protocol: Yunix")
+2026-05-05 14:30:50,364 - logs - INFO - Removed: portainer
+2026-05-05 14:36:31,540 - logs - INFO - 'logs' folder already exists.
+2026-05-05 14:36:34,745 - logs - INFO - Selected: my-app  [created]
+2026-05-05 14:36:41,796 - logs - INFO - Removed: my-app
+2026-05-05 14:36:43,860 - logs - INFO - No container selected.
+2026-05-05 14:36:45,758 - logs - INFO - Selected: my-db  [created]
+2026-05-05 14:36:48,224 - logs - INFO - Removed: my-db
+2026-05-05 14:36:49,314 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 14:36:52,477 - logs - INFO - Removed: debian_trixie-backports_keepalive
+2026-05-05 14:36:53,369 - logs - INFO - Selected: debian-test  [exited]
+2026-05-05 14:36:56,816 - logs - INFO - Removed: debian-test
+2026-05-05 14:36:58,003 - logs - INFO - Selected: xenodochial_lichterman  [exited]
+2026-05-05 14:37:01,092 - logs - INFO - Removed: xenodochial_lichterman
+2026-05-05 14:37:44,520 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 14:37:44,527 - logs - INFO - ⚠  Docker Swarm nem támogatott Podman alatt.
+2026-05-05 14:39:19,107 - logs - INFO - Backend: Docker
+2026-05-05 14:39:23,309 - logs - INFO - Már fut egy művelet.
+2026-05-05 14:39:26,325 - logs - INFO - Már fut egy művelet.
+2026-05-05 14:39:34,554 - logs - INFO - Selected: my-app  [created]
+2026-05-05 14:39:36,021 - logs - INFO - Selected: my-db  [created]
+2026-05-05 14:39:37,799 - logs - INFO - Error starting: 500 Server Error for http+docker://localhost/v1.54/containers/df9168942b153a37836004b9023266e3ecc4f7002ace6b079e0e3cde61754a4f/start: Internal Server Error ("failed to create task for container: failed to start shim: start failed: failed to create TTRPC connection: unsupported protocol: Yunix")
+2026-05-05 14:39:39,087 - logs - INFO - Selected: my-app  [created]
+2026-05-05 14:39:40,741 - logs - INFO - Error starting: 500 Server Error for http+docker://localhost/v1.54/containers/adf304986f13d1b67016e0da47343c6318eeab8b23ffdb5d5beda99575150d39/start: Internal Server Error ("failed to create task for container: failed to start shim: start failed: failed to create TTRPC connection: unsupported protocol: Yunix")
+2026-05-05 14:40:33,225 - logs - INFO - Removed: my-app
+2026-05-05 14:40:37,178 - logs - INFO - Selected: my-db  [created]
+2026-05-05 14:40:39,594 - logs - INFO - Removed: my-db
+2026-05-05 14:40:44,316 - logs - INFO - Már fut egy művelet.
+2026-05-05 14:40:54,682 - logs - INFO - 'logs' folder already exists.
+2026-05-05 17:29:09,905 - logs - INFO - 'logs' folder already exists.
+2026-05-05 17:31:10,241 - logs - INFO - Started keep-alive container 'ubuntu_latest_keepalive' (ea464637a2e7)
+2026-05-05 17:31:16,811 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 17:32:53,724 - logs - INFO - ── Logs: ubuntu_latest_keepalive ──
 
-2024-09-17 09:49:35,703 - logs - INFO - Server started.
-2024-09-17 09:49:35,712 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
- * Running on http://127.0.0.1:5000
-2024-09-17 09:49:35,712 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
-2024-09-17 09:49:50,083 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "GET / HTTP/1.1" 200 -
-2024-09-17 09:49:50,147 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "GET /static/styles.css HTTP/1.1" 200 -
-2024-09-17 09:49:50,152 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:50] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
-2024-09-17 09:49:54,688 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:54] "GET / HTTP/1.1" 200 -
-2024-09-17 09:49:54,710 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:54] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
-2024-09-17 09:49:57,221 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:57] "GET /images HTTP/1.1" 200 -
-2024-09-17 09:49:57,259 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:57] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
-2024-09-17 09:49:59,181 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:59] "POST /image HTTP/1.1" 200 -
-2024-09-17 09:49:59,210 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:49:59] "[36mGET /static/styles.css HTTP/1.1[0m" 304 -
-2024-09-17 09:50:09,170 - logs - INFO - Listing all containers.
-2024-09-17 09:50:16,340 - Image_detailer.app - ERROR - Exception on /shutdown [POST]
-Traceback (most recent call last):
-  File "/usr/lib/python3.12/site-packages/flask/app.py", line 2190, in wsgi_app
-    response = self.full_dispatch_request()
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1486, in full_dispatch_request
-    rv = self.handle_user_exception(e)
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1484, in full_dispatch_request
-    rv = self.dispatch_request()
-         ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.12/site-packages/flask/app.py", line 1469, in dispatch_request
-    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/user/Docker_manager/DockerManager/Image_detailer/app.py", line 145, in shutdown
-    raise RuntimeError('Not running with the Werkzeug Server')
-RuntimeError: Not running with the Werkzeug Server
-2024-09-17 09:50:16,342 - werkzeug - INFO - 127.0.0.1 - - [17/Sep/2024 09:50:16] "[35m[1mPOST /shutdown HTTP/1.1[0m" 500 -
-2024-09-17 09:50:16,343 - logs - INFO - Server shutdown request sent.
-2024-09-17 09:50:16,343 - logs - INFO - Server thread joined successfully.
-2024-09-17 11:29:14,927 - logs - INFO - Listing all images.
-2024-09-17 11:29:20,216 - logs - INFO - Container started from image 'sha256:4fd3f4b75df372cc4fd60fd5c133c666cf4738ca0973523513f564076395f8ad'. Container ID: 505314d59d5bf386f6b6a8c47cc8ac67760bd2b7c7f75e45f9118fb100c837d6
-2024-09-17 11:29:20,216 - logs - INFO - Opening shell for container with ID: 505314d59d5bf386f6b6a8c47cc8ac67760bd2b7c7f75e45f9118fb100c837d6
+2026-05-05 17:32:55,209 - logs - INFO - ── Logs: ubuntu_latest_keepalive ──
+
+2026-05-05 17:33:12,059 - logs - INFO - ── Logs: ubuntu_latest_keepalive ──
+
+2026-05-05 18:14:59,519 - logs - INFO - 'logs' folder already exists.
+2026-05-05 18:15:02,813 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:17:57,288 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 18:24:05,428 - logs - INFO - 'logs' folder already exists.
+2026-05-05 18:24:08,547 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:24:26,964 - logs - INFO - Selected: my-app  [created]
+2026-05-05 18:24:28,840 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:24:41,966 - logs - INFO - 'logs' folder already exists.
+2026-05-05 18:24:45,821 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:25:28,462 - logs - INFO - ── Logs: ubuntu_latest_keepalive ──
+
+2026-05-05 18:25:31,186 - logs - INFO - ── Inspect: ubuntu_latest_keepalive ──
+{
+  "Id": "ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b",
+  "Created": "2026-05-05T15:31:09.590320286Z",
+  "Path": "sleep",
+  "Args": [
+    "infinity"
+  ],
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 14162,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-05-05T16:19:24.455551416Z",
+    "FinishedAt": "2026-05-05T16:17:57.009605171Z"
+  },
+  "Image": "sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b",
+  "ResolvConfPath": "/var/lib/docker/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/resolv.conf",
+  "HostnamePath": "/var/lib/docker/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/hostname",
+  "HostsPath": "/var/lib/docker/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/hosts",
+  "LogPath": "/var/lib/docker/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b-json.log",
+  "Name": "/ubuntu_latest_keepalive",
+  "RestartCount": 0,
+  "Driver": "overlayfs",
+  "Platform": "linux",
+  "MountLabel": "",
+  "ProcessLabel": "",
+  "AppArmorProfile": "",
+  "ExecIDs": [
+    "73b5c9a188e32bc2737365767c8bb8648fb583fab4a828d4693b986b2278ab90",
+    "10c8549b4188ac2151498553bab63ed4cabd010a8eab91e6a9ed14fcbda56197",
+    "1620b59bb85f5f509cc9e0d592659088b4c0fbdcda54f9678a990ddeed2ed112",
+    "5812a3a5f52fc97a7b9608d014050b74e060104624bbb61707cfad073b492b5e"
+  ],
+  "HostConfig": {
+    "Binds": null,
+    "ContainerIDFile": "",
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {}
+    },
+    "NetworkMode": "bridge",
+    "PortBindings": {},
+    "RestartPolicy": {
+      "Name": "no",
+      "MaximumRetryCount": 0
+    },
+    "AutoRemove": false,
+    "VolumeDriver": "",
+    "VolumesFrom": null,
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "CapAdd": null,
+    "CapDrop": null,
+    "CgroupnsMode": "private",
+    "Dns": null,
+    "DnsOptions": null,
+    "DnsSearch": null,
+    "ExtraHosts": null,
+    "GroupAdd": null,
+    "IpcMode": "private",
+    "Cgroup": "",
+    "Links": null,
+    "OomScoreAdj": 0,
+    "PidMode": "",
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyRootfs": false,
+    "SecurityOpt": null,
+    "UTSMode": "",
+    "UsernsMode": "",
+    "ShmSize": 67108864,
+    "Runtime": "runc",
+    "Isolation": "",
+    "CpuShares": 0,
+    "Memory": 0,
+    "NanoCpus": 0,
+    "CgroupParent": "",
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": null,
+    "BlkioDeviceReadBps": null,
+    "BlkioDeviceWriteBps": null,
+    "BlkioDeviceReadIOps": null,
+    "BlkioDeviceWriteIOps": null,
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "Devices": null,
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "MemoryReservation": 0,
+    "MemorySwap": 0,
+    "MemorySwappiness": null,
+    "OomKillDisable": null,
+    "PidsLimit": null,
+    "Ulimits": null,
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "IOMaximumIOps": 0,
+    "IOMaximumBandwidth": 0,
+    "MaskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/interrupts",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/sys/devices/virtual/powercap",
+      "/sys/firmware",
+      "/sys/devices/system/cpu/cpu0/thermal_throttle",
+      "/sys/devices/system/cpu/cpu1/thermal_throttle",
+      "/sys/devices/system/cpu/cpu2/thermal_throttle",
+      "/sys/devices/system/cpu/cpu3/thermal_throttle",
+      "/sys/devices/system/cpu/cpu4/thermal_throttle",
+      "/sys/devices/system/cpu/cpu5/thermal_throttle",
+      "/sys/devices/system/cpu/cpu6/thermal_throttle",
+      "/sys/devices/system/cpu/cpu7/thermal_throttle"
+    ],
+    "ReadonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ]
+  },
+  "Storage": {
+    "RootFS": {
+      "Snapshot": {
+        "Name": "overlayfs"
+      }
+    }
+  },
+  "Mounts": [],
+  "Config": {
+    "Hostname": "ea464637a2e7",
+    "Domainname": "",
+    "User": "",
+    "AttachStdin": false,
+    "AttachStdout": false,
+    "AttachStderr": false,
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "Cmd": [
+      "sleep",
+      "infinity"
+    ],
+    "Image": "sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b",
+    "Volumes": null,
+    "WorkingDir": "",
+    "Entrypoint": null,
+    "Labels": {
+      "org.opencontainers.image.version": "24.04"
+    }
+  },
+  "NetworkSettings": {
+    "SandboxID": "2e506e466c45170ca3a47c12378f9e59ca8c5cb612f20bc1e5f2f177cb316c45",
+    "SandboxKey": "/var/run/docker/netns/2e506e466c45",
+    "Ports": {},
+    "Networks": {
+      "bridge": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": null,
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "3fc1522674d14893395cb0701950ba61e9c8c282598c35494707f3f570da4e51",
+        "EndpointID": "4ea93f6682e13a6f13e3d174d40c992d74e054269b6e9b8587152a0feb354afc",
+        "Gateway": "172.17.0.1",
+        "IPAddress": "172.17.0.2",
+        "MacAddress": "3a:b8:1d:27:1e:1c",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": null
+      }
+    }
+  },
+  "ImageManifestDescriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:cdb5fd928fced577cfecf12c8966e830fcdf42ee481fb0b91904eeddc2fe5eff",
+    "size": 424,
+    "annotations": {
+      "com.docker.official-images.bashbrew.arch": "amd64",
+      "org.opencontainers.image.base.name": "scratch",
+      "org.opencontainers.image.created": "2026-04-10T00:00:00Z",
+      "org.opencontainers.image.revision": "a17a2429ff85ab773e86c558a75ae62053ef9936",
+      "org.opencontainers.image.source": "https://git.launchpad.net/cloud-images/+oci/ubuntu-base",
+      "org.opencontainers.image.url": "https://hub.docker.com/_/ubuntu",
+      "org.opencontainers.image.version": "24.04"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  }
+}
+2026-05-05 18:25:58,075 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 18:26:05,408 - logs - INFO - Started: ubuntu_latest_keepalive
+2026-05-05 18:26:14,374 - logs - INFO - Selected: my-app  [created]
+2026-05-05 18:26:15,474 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:26:53,355 - logs - INFO - Selected: my-app  [created]
+2026-05-05 18:26:54,895 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:27:13,246 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 18:27:13,516 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 18:53:18,864 - logs - INFO - 'logs' folder already exists.
+2026-05-05 18:53:22,251 - logs - INFO - Selected: ubuntu_latest_keepalive  [exited]
+2026-05-05 18:53:23,725 - logs - INFO - Error starting: 400 Client Error for http+docker://localhost/v1.54/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/start: Bad Request ("failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "sleep": executable file not found in $PATH")
+2026-05-05 18:53:27,818 - logs - INFO - Error starting: 400 Client Error for http+docker://localhost/v1.54/containers/ea464637a2e705908ae474737ff7f3125517b778df643e786b2ff0850e3eff2b/start: Bad Request ("failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "sleep": executable file not found in $PATH")
+2026-05-05 18:53:32,306 - logs - INFO - Removed: ubuntu_latest_keepalive
+2026-05-05 18:53:33,736 - logs - INFO - No container selected.
+2026-05-05 18:53:35,661 - logs - INFO - Selected: my-app  [created]
+2026-05-05 18:53:38,538 - logs - INFO - Removed: my-app
+2026-05-05 18:53:40,036 - logs - INFO - Selected: my-db  [created]
+2026-05-05 18:53:41,924 - logs - INFO - Removed: my-db
+2026-05-05 18:53:51,721 - logs - INFO - Started keep-alive container 'debian_trixie-backports_keepalive' (90068c796469)
+2026-05-05 18:53:57,362 - logs - INFO - Selected: debian_trixie-backports_keepalive  [running]
+2026-05-05 18:55:06,550 - logs - INFO - Started: debian_trixie-backports_keepalive
+2026-05-05 18:55:30,574 - logs - INFO - Stopped: debian_trixie-backports_keepalive
+2026-05-05 18:55:42,430 - logs - INFO - Started: debian_trixie-backports_keepalive
+2026-05-05 18:56:01,828 - logs - INFO - Stopped: debian_trixie-backports_keepalive
+2026-05-05 18:56:35,973 - logs - INFO - 'logs' folder already exists.
+2026-05-05 18:56:38,869 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 18:56:40,201 - logs - INFO - Started: debian_trixie-backports_keepalive
+2026-05-05 18:56:53,031 - logs - INFO - Started keep-alive container 'ubuntu_latest_keepalive' (b4d2d8ecba44)
+2026-05-05 18:57:00,557 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:57:02,149 - logs - INFO - Selected: debian_trixie-backports_keepalive  [running]
+2026-05-05 18:57:07,667 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:57:12,570 - logs - INFO - Selected: debian_trixie-backports_keepalive  [running]
+2026-05-05 18:57:30,457 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 18:57:43,604 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 18:57:44,635 - logs - INFO - Selected: debian_trixie-backports_keepalive  [running]
+2026-05-05 18:57:59,311 - logs - INFO - Stopped: debian_trixie-backports_keepalive
+2026-05-05 19:02:43,289 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:02:46,556 - logs - INFO - Selected: ubuntu_latest_keepalive  [exited]
+2026-05-05 19:02:47,676 - logs - INFO - Started: ubuntu_latest_keepalive
+2026-05-05 19:02:59,514 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 19:03:00,208 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 19:03:11,448 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 19:03:12,397 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 19:09:37,006 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:09:40,010 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 19:09:53,064 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 19:09:53,762 - logs - INFO - Selected: ubuntu_latest_keepalive  [running]
+2026-05-05 19:11:13,099 - logs - INFO - Stopped: ubuntu_latest_keepalive
+2026-05-05 19:18:46,167 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:20:21,247 - logs - INFO - Selected: my-app  [running]
+2026-05-05 19:20:25,622 - logs - INFO - Selected: my-db  [running]
+2026-05-05 19:22:41,649 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:22:44,699 - logs - INFO - Selected: my-app  [running]
+2026-05-05 19:28:50,177 - logs - INFO - Stopped: my-app
+2026-05-05 19:28:52,691 - logs - INFO - Selected: my-db  [running]
+2026-05-05 19:28:54,550 - logs - INFO - Stopped: my-db
+2026-05-05 19:29:30,111 - logs - INFO - Selected: portainer  [running]
+2026-05-05 19:29:31,636 - logs - INFO - Stopped: portainer
+2026-05-05 19:29:35,430 - logs - INFO - Removed: portainer
+2026-05-05 19:29:36,411 - logs - INFO - No container selected.
+2026-05-05 19:29:37,894 - logs - INFO - Selected: my-app  [exited]
+2026-05-05 19:29:39,136 - logs - INFO - Removed: my-app
+2026-05-05 19:29:40,471 - logs - INFO - Selected: my-db  [exited]
+2026-05-05 19:29:41,898 - logs - INFO - Removed: my-db
+2026-05-05 19:29:43,374 - logs - INFO - Selected: ubuntu_latest_keepalive  [exited]
+2026-05-05 19:29:45,369 - logs - INFO - Removed: ubuntu_latest_keepalive
+2026-05-05 19:29:46,439 - logs - INFO - Selected: debian_trixie-backports_keepalive  [exited]
+2026-05-05 19:29:49,098 - logs - INFO - Removed: debian_trixie-backports_keepalive
+2026-05-05 19:30:09,062 - logs - INFO - Selected: portainer  [running]
+2026-05-05 19:31:47,861 - logs - INFO - Removed: portainer
+2026-05-05 19:33:31,482 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:36:42,290 - logs - INFO - Selected: letltsek-db-1  [running]
+2026-05-05 19:36:44,101 - logs - INFO - ── Inspect: letltsek-db-1 ──
+{
+  "Id": "40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873",
+  "Created": "2026-05-05T17:34:16.162314833Z",
+  "Path": "docker-entrypoint.sh",
+  "Args": [
+    "postgres"
+  ],
+  "State": {
+    "Status": "running",
+    "Running": true,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 31263,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-05-05T17:34:20.124963489Z",
+    "FinishedAt": "0001-01-01T00:00:00Z",
+    "Health": {
+      "Status": "healthy",
+      "FailingStreak": 0,
+      "Log": [
+        {
+          "Start": "2026-05-05T19:36:19.089004818+02:00",
+          "End": "2026-05-05T19:36:19.285251462+02:00",
+          "ExitCode": 0,
+          "Output": "/var/run/postgresql:5432 - accepting connections\n"
+        },
+        {
+          "Start": "2026-05-05T19:36:24.28676709+02:00",
+          "End": "2026-05-05T19:36:24.392729926+02:00",
+          "ExitCode": 0,
+          "Output": "/var/run/postgresql:5432 - accepting connections\n"
+        },
+        {
+          "Start": "2026-05-05T19:36:29.393834252+02:00",
+          "End": "2026-05-05T19:36:29.462664664+02:00",
+          "ExitCode": 0,
+          "Output": "/var/run/postgresql:5432 - accepting connections\n"
+        },
+        {
+          "Start": "2026-05-05T19:36:34.463746865+02:00",
+          "End": "2026-05-05T19:36:34.540257201+02:00",
+          "ExitCode": 0,
+          "Output": "/var/run/postgresql:5432 - accepting connections\n"
+        },
+        {
+          "Start": "2026-05-05T19:36:39.541595772+02:00",
+          "End": "2026-05-05T19:36:39.692984776+02:00",
+          "ExitCode": 0,
+          "Output": "/var/run/postgresql:5432 - accepting connections\n"
+        }
+      ]
+    }
+  },
+  "Image": "sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50",
+  "ResolvConfPath": "/var/lib/docker/containers/40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873/resolv.conf",
+  "HostnamePath": "/var/lib/docker/containers/40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873/hostname",
+  "HostsPath": "/var/lib/docker/containers/40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873/hosts",
+  "LogPath": "/var/lib/docker/containers/40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873/40eff5337e8d5e6638c700107f0fc79d545dece0f2335a9e4f9c5d73b8957873-json.log",
+  "Name": "/letltsek-db-1",
+  "RestartCount": 0,
+  "Driver": "overlayfs",
+  "Platform": "linux",
+  "MountLabel": "",
+  "ProcessLabel": "",
+  "AppArmorProfile": "",
+  "ExecIDs": [
+    "e0a4d7814e287ad180dcedbec2f97a03f7b6a2bf2567ebdfdc598c8e7fe3f1c2"
+  ],
+  "HostConfig": {
+    "Binds": [
+      "letltsek_db_data:/var/lib/postgresql/data:rw"
+    ],
+    "ContainerIDFile": "",
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {}
+    },
+    "NetworkMode": "letltsek_backend",
+    "PortBindings": {},
+    "RestartPolicy": {
+      "Name": "unless-stopped",
+      "MaximumRetryCount": 0
+    },
+    "AutoRemove": false,
+    "VolumeDriver": "",
+    "VolumesFrom": null,
+    "ConsoleSize": [
+      0,
+      0
+    ],
+    "CapAdd": null,
+    "CapDrop": null,
+    "CgroupnsMode": "private",
+    "Dns": null,
+    "DnsOptions": null,
+    "DnsSearch": null,
+    "ExtraHosts": [],
+    "GroupAdd": null,
+    "IpcMode": "private",
+    "Cgroup": "",
+    "Links": null,
+    "OomScoreAdj": 0,
+    "PidMode": "",
+    "Privileged": false,
+    "PublishAllPorts": false,
+    "ReadonlyRootfs": false,
+    "SecurityOpt": null,
+    "UTSMode": "",
+    "UsernsMode": "",
+    "ShmSize": 67108864,
+    "Runtime": "runc",
+    "Isolation": "",
+    "CpuShares": 0,
+    "Memory": 0,
+    "NanoCpus": 0,
+    "CgroupParent": "",
+    "BlkioWeight": 0,
+    "BlkioWeightDevice": null,
+    "BlkioDeviceReadBps": null,
+    "BlkioDeviceWriteBps": null,
+    "BlkioDeviceReadIOps": null,
+    "BlkioDeviceWriteIOps": null,
+    "CpuPeriod": 0,
+    "CpuQuota": 0,
+    "CpuRealtimePeriod": 0,
+    "CpuRealtimeRuntime": 0,
+    "CpusetCpus": "",
+    "CpusetMems": "",
+    "Devices": null,
+    "DeviceCgroupRules": null,
+    "DeviceRequests": null,
+    "MemoryReservation": 0,
+    "MemorySwap": 0,
+    "MemorySwappiness": null,
+    "OomKillDisable": null,
+    "PidsLimit": null,
+    "Ulimits": null,
+    "CpuCount": 0,
+    "CpuPercent": 0,
+    "IOMaximumIOps": 0,
+    "IOMaximumBandwidth": 0,
+    "MaskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/interrupts",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/sched_debug",
+      "/proc/scsi",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/sys/devices/virtual/powercap",
+      "/sys/firmware",
+      "/sys/devices/system/cpu/cpu0/thermal_throttle",
+      "/sys/devices/system/cpu/cpu1/thermal_throttle",
+      "/sys/devices/system/cpu/cpu2/thermal_throttle",
+      "/sys/devices/system/cpu/cpu3/thermal_throttle",
+      "/sys/devices/system/cpu/cpu4/thermal_throttle",
+      "/sys/devices/system/cpu/cpu5/thermal_throttle",
+      "/sys/devices/system/cpu/cpu6/thermal_throttle",
+      "/sys/devices/system/cpu/cpu7/thermal_throttle"
+    ],
+    "ReadonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ]
+  },
+  "Storage": {
+    "RootFS": {
+      "Snapshot": {
+        "Name": "overlayfs"
+      }
+    }
+  },
+  "Mounts": [
+    {
+      "Type": "volume",
+      "Name": "letltsek_db_data",
+      "Source": "/var/lib/docker/volumes/letltsek_db_data/_data",
+      "Destination": "/var/lib/postgresql/data",
+      "Driver": "local",
+      "Mode": "rw",
+      "RW": true,
+      "Propagation": ""
+    }
+  ],
+  "Config": {
+    "Hostname": "40eff5337e8d",
+    "Domainname": "",
+    "User": "",
+    "AttachStdin": false,
+    "AttachStdout": true,
+    "AttachStderr": true,
+    "ExposedPorts": {
+      "5432/tcp": {}
+    },
+    "Tty": false,
+    "OpenStdin": false,
+    "StdinOnce": false,
+    "Env": [
+      "POSTGRES_PASSWORD=secret",
+      "POSTGRES_DB=appdb",
+      "POSTGRES_USER=admin",
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      "GOSU_VERSION=1.19",
+      "LANG=en_US.utf8",
+      "PG_MAJOR=16",
+      "PG_VERSION=16.13",
+      "PG_SHA256=dc2ddbbd245c0265a689408e3d2f2f3f9ba2da96bd19318214b313cdd9797287",
+      "DOCKER_PG_LLVM_DEPS=llvm19-dev \t\tclang19",
+      "PGDATA=/var/lib/postgresql/data"
+    ],
+    "Cmd": [
+      "postgres"
+    ],
+    "Healthcheck": {
+      "Test": [
+        "CMD-SHELL",
+        "pg_isready -U admin -d appdb"
+      ],
+      "Interval": 5000000000,
+      "Timeout": 3000000000,
+      "Retries": 5
+    },
+    "Image": "postgres:16-alpine",
+    "Volumes": {
+      "/var/lib/postgresql/data": {}
+    },
+    "WorkingDir": "/",
+    "Entrypoint": [
+      "docker-entrypoint.sh"
+    ],
+    "Labels": {
+      "com.docker.compose.config-hash": "5c2f97d5c5c1b1d5ec090cfc4fbffa3211b90694bbb8add02b92eef5b149bff3",
+      "com.docker.compose.container-number": "1",
+      "com.docker.compose.depends_on": "",
+      "com.docker.compose.image": "sha256:4e6e670bb069649261c9c18031f0aded7bb249a5b6664ddec29c013a89310d50",
+      "com.docker.compose.oneoff": "False",
+      "com.docker.compose.project": "letltsek",
+      "com.docker.compose.project.config_files": "/home/gyuri/Let\u00f6lt\u00e9sek/compose 2.yml",
+      "com.docker.compose.project.working_dir": "/home/gyuri/Let\u00f6lt\u00e9sek",
+      "com.docker.compose.service": "db",
+      "com.docker.compose.version": "5.1.3"
+    },
+    "StopSignal": "SIGINT"
+  },
+  "NetworkSettings": {
+    "SandboxID": "be45ec7b3b15e54d43a6ae253e995bbc29a25f07b0c68eec9278d263d551e192",
+    "SandboxKey": "/var/run/docker/netns/be45ec7b3b15",
+    "Ports": {
+      "5432/tcp": null
+    },
+    "Networks": {
+      "letltsek_backend": {
+        "IPAMConfig": null,
+        "Links": null,
+        "Aliases": [
+          "letltsek-db-1",
+          "db"
+        ],
+        "DriverOpts": null,
+        "GwPriority": 0,
+        "NetworkID": "9861c7006379a2102d0c9f1412694fc06215045dd47f13dfcd74314c2def0010",
+        "EndpointID": "488d6a5fc8011ebf509173c24a9e7a487771d415199c22b34f02bc5c90eb011f",
+        "Gateway": "172.20.0.1",
+        "IPAddress": "172.20.0.3",
+        "MacAddress": "22:49:ab:54:cb:19",
+        "IPPrefixLen": 16,
+        "IPv6Gateway": "",
+        "GlobalIPv6Address": "",
+        "GlobalIPv6PrefixLen": 0,
+        "DNSNames": [
+          "letltsek-db-1",
+          "db",
+          "40eff5337e8d"
+        ]
+      }
+    }
+  },
+  "ImageManifestDescriptor": {
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "digest": "sha256:4941ef97aaa2633ce9808f7766f8b8d746dd039ce8c51ca6da185c3dc63ab579",
+    "size": 3054,
+    "annotations": {
+      "com.docker.official-images.bashbrew.arch": "amd64",
+      "org.opencontainers.image.base.digest": "sha256:4d889c14e7d5a73929ab00be2ef8ff22437e7cbc545931e52554a7b00e123d8b",
+      "org.opencontainers.image.base.name": "alpine:3.23",
+      "org.opencontainers.image.created": "2026-04-21T23:07:55Z",
+      "org.opencontainers.image.revision": "3b6b5fca9ca40c84b77540fc605ea8e8353b13b2",
+      "org.opencontainers.image.source": "https://github.com/docker-library/postgres.git#3b6b5fca9ca40c84b77540fc605ea8e8353b13b2:16/alpine3.23",
+      "org.opencontainers.image.url": "https://hub.docker.com/_/postgres",
+      "org.opencontainers.image.version": "16.13-alpine3.23"
+    },
+    "platform": {
+      "architecture": "amd64",
+      "os": "linux"
+    }
+  }
+}
+2026-05-05 19:37:16,292 - logs - INFO - Selected: letltsek-adminer-1  [running]
+2026-05-05 19:37:20,193 - logs - INFO - Removed: letltsek-adminer-1
+2026-05-05 19:37:21,917 - logs - INFO - Selected: letltsek-db-1  [running]
+2026-05-05 19:37:24,710 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 19:37:24,755 - logs - INFO - Removed: letltsek-db-1
+2026-05-05 19:37:28,068 - logs - INFO - Selected: letltsek-redis-1  [running]
+2026-05-05 19:37:30,466 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 19:37:30,505 - logs - INFO - Removed: letltsek-redis-1
+2026-05-05 19:37:36,968 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 19:37:36,975 - logs - INFO - ⚠  Docker Swarm is not supported under Podman.
+2026-05-05 19:37:39,331 - logs - INFO - Selected: docker.io_library_debian_latest_keepalive  [exited]
+2026-05-05 19:37:42,127 - logs - INFO - Removed: docker.io_library_debian_latest_keepalive
+2026-05-05 19:38:53,150 - logs - INFO - An operation is already running.
+2026-05-05 19:38:56,951 - logs - INFO - An operation is already running.
+2026-05-05 19:39:01,078 - logs - INFO - An operation is already running.
+2026-05-05 19:39:11,646 - logs - INFO - 'logs' folder already exists.
+2026-05-05 19:39:17,981 - logs - INFO - Backend: Podman  v5.8.2  API 1.44
+2026-05-05 19:39:17,987 - logs - INFO - ⚠  Docker Swarm is not supported under Podman.
+2026-05-05 19:41:19,610 - logs - INFO - Selected: letltsek_db_1  [running]
+2026-05-05 19:41:23,539 - logs - INFO - Error removing: 500 Server Error for http+docker://localhost/v1.44/containers/1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd?v=False&link=False&force=True: Internal Server Error ("container 1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd has dependent containers which must be removed before it: 8ffb86e016a865b6a5af60d98f509254e9e9d05f07527f257cad769c62dd8389: container already exists")
+2026-05-05 19:41:30,986 - logs - INFO - Error removing: 500 Server Error for http+docker://localhost/v1.44/containers/1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd?v=False&link=False&force=True: Internal Server Error ("container 1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd has dependent containers which must be removed before it: 8ffb86e016a865b6a5af60d98f509254e9e9d05f07527f257cad769c62dd8389: container already exists")
+2026-05-05 19:41:33,717 - logs - INFO - Stopped: letltsek_db_1
+2026-05-05 19:41:36,289 - logs - INFO - Error removing: 500 Server Error for http+docker://localhost/v1.44/containers/1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd?v=False&link=False&force=True: Internal Server Error ("container 1027b575bc68a041f923b29c3d805d3555cdee1a6251b414b2e67058b16a81bd has dependent containers which must be removed before it: 8ffb86e016a865b6a5af60d98f509254e9e9d05f07527f257cad769c62dd8389: container already exists")
+2026-05-05 19:41:37,704 - logs - INFO - Selected: letltsek_redis_1  [running]
+2026-05-05 19:41:40,639 - logs - INFO - Stopped: letltsek_redis_1
+2026-05-05 19:41:41,273 - logs - INFO - Selected: letltsek_adminer_1  [running]
+2026-05-05 19:41:42,870 - logs - INFO - Stopped: letltsek_adminer_1
+2026-05-05 19:41:45,988 - logs - INFO - Removed: letltsek_adminer_1
+2026-05-05 19:41:47,229 - logs - INFO - Selected: letltsek_redis_1  [exited]
+2026-05-05 19:41:49,265 - logs - INFO - Removed: letltsek_redis_1
+2026-05-05 19:41:50,246 - logs - INFO - Selected: letltsek_db_1  [exited]
+2026-05-05 19:41:52,290 - logs - INFO - Removed: letltsek_db_1

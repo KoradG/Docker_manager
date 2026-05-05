@@ -1,0 +1,2 @@
+2026-05-05 19:37:24,710 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)
+2026-05-05 19:37:30,466 - resource_monitor - ERROR - Unexpected error fetching stats: Expecting value: line 1 column 1 (char 0)

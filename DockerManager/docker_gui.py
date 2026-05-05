@@ -1,120 +1,629 @@
+import os
+import re
+import subprocess
+import socket
+import docker
+import pty
+import fcntl
+import termios
+import struct
+import pyte
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTextEdit, QInputDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QLabel, QDialog,
-    QFileDialog, QMessageBox, QFrame, QShortcut, QDialogButtonBox, QAction,
-    QProgressDialog, QGroupBox, QMenu, QListWidget, QListWidgetItem , QSplitter,
-    QFormLayout, QSpinBox, QComboBox
+    QFileDialog, QMessageBox, QFrame, QDialogButtonBox,
+    QProgressDialog, QMenu, QScrollArea, QSplitter, QStackedWidget,
+    QFormLayout, QSpinBox, QComboBox, QProgressBar
 )
-
-from PyQt5.QtGui import QKeySequence, QFont, QColor
-from PyQt5.QtCore import QPropertyAnimation, QRect, QThread, pyqtSignal, Qt, QTimer
-
-import os
-import yaml
-import subprocess
-import docker
-from docker.types import Resources
-from docker.errors import APIError as DockerAPIError
-import socket
-import time
-import threading
-from flask import Flask
-import requests
+from PyQt5.QtGui import QFont, QColor, QTextCursor, QPainter, QFontMetrics
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 
 from logs import Logger
-from docker_client import get_docker_client
 from resource_monitor import ResourceGraphWidget, ResourceMonitorThread
-from terminal_utils import terminal_emulator, open_terminal_with_command
 from swarm import SwarmManager
-from Image_detailer.app import ImageD
+from podman_utils import (
+    get_podman_client, is_podman_available,
+    PodmanCapabilities,
+)
 
 
-class ScaleServiceThread(QThread):
-    result = pyqtSignal(str)
+# ---------------------------------------------------------------------------
+# Stylesheets
+# ---------------------------------------------------------------------------
 
-    def __init__(self, swarm_manager, service_name, replicas):
-        super().__init__()
-        self.swarm_manager = swarm_manager
-        self.service_name = service_name
-        self.replicas = replicas
+DARK_THEME = """
+QWidget {
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Segoe UI', Ubuntu, sans-serif;
+    font-size: 13px;
+}
+QTextEdit, QLineEdit {
+    background-color: #141414;
+    color: #d4d4d4;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 4px;
+}
+QTextEdit:focus, QLineEdit:focus {
+    border-color: #007acc;
+}
+QScrollBar:vertical {
+    background: #1e1e1e;
+    width: 8px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+QScrollBar:horizontal {
+    background: #1e1e1e;
+    height: 8px;
+}
+QScrollBar::handle:horizontal {
+    background: #4a4a4a;
+    border-radius: 4px;
+}
+QProgressBar {
+    background-color: #2d2d2d;
+    border: none;
+    border-radius: 3px;
+}
+QProgressBar::chunk {
+    background-color: #007acc;
+    border-radius: 3px;
+}
+QComboBox {
+    background-color: #2d2d2d;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-width: 120px;
+}
+QComboBox:hover { border-color: #007acc; }
+QComboBox::drop-down { border: none; width: 20px; }
+QComboBox QAbstractItemView {
+    background-color: #2d2d2d;
+    border: 1px solid #3a3a3a;
+    selection-background-color: #264f78;
+}
+QTableWidget {
+    background-color: #1e1e1e;
+    gridline-color: #2d2d2d;
+    border: none;
+}
+QTableWidget::item { padding: 4px; }
+QTableWidget::item:selected { background-color: #264f78; }
+QHeaderView::section {
+    background-color: #252526;
+    color: #9cdcfe;
+    padding: 6px;
+    border: 1px solid #3a3a3a;
+    font-weight: bold;
+}
+QSplitter::handle { background-color: #3a3a3a; width: 1px; height: 1px; }
+QScrollArea { border: none; background: transparent; }
+QDialog { background-color: #1e1e1e; }
+QMessageBox { background-color: #1e1e1e; }
+QInputDialog { background-color: #1e1e1e; }
+QLabel { color: #d4d4d4; }
+"""
+
+NAV_BTN_STYLE = """
+QPushButton {
+    background-color: transparent;
+    color: #9d9d9d;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: bold;
+}
+QPushButton:hover { color: #d4d4d4; }
+QPushButton:checked {
+    color: #4fc3f7;
+    border-bottom: 2px solid #4fc3f7;
+}
+"""
+
+ACTION_BTN_STYLE = """
+QPushButton {
+    background-color: #2a2a2a;
+    color: #d4d4d4;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 6px 10px;
+    text-align: left;
+}
+QPushButton:hover { background-color: #3a3a3a; border-color: #007acc; }
+QPushButton:pressed { background-color: #264f78; }
+"""
+
+MONITOR_BTN_STYLE = """
+QPushButton {
+    background-color: #1e3a5f;
+    color: #4fc3f7;
+    border: 1px solid #007acc;
+    border-radius: 4px;
+    padding: 6px 10px;
+}
+QPushButton:hover { background-color: #264f78; }
+"""
+
+TABLE_BTN_STYLE = """
+QPushButton {
+    background-color: #2a2a2a;
+    color: #9cdcfe;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 4px 10px;
+    min-width: 70px;
+}
+QPushButton:hover { background-color: #264f78; border-color: #007acc; }
+QPushButton:pressed { background-color: #1e3a5f; }
+"""
+
+DANGER_BTN_STYLE = """
+QPushButton {
+    background-color: #3a1a1a;
+    color: #f44747;
+    border: 1px solid #5a2a2a;
+    border-radius: 4px;
+    padding: 4px 10px;
+    min-width: 70px;
+}
+QPushButton:hover { background-color: #5a2a2a; }
+"""
+
+# ---------------------------------------------------------------------------
+# ANSI strip
+# ---------------------------------------------------------------------------
+
+ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
-    def run(self):
-        result = self.swarm_manager.scale_service(self.service_name, self.replicas)
-        self.result.emit(result)
+# ---------------------------------------------------------------------------
+# Terminal: ANSI color table, 256-color helper, key map
+# ---------------------------------------------------------------------------
 
-class DeployServiceThread(QThread):
-    result = pyqtSignal(str)
+_ANSI_COLORS = {
+    'black':         QColor('#1e1e1e'),
+    'red':           QColor('#f44747'),
+    'green':         QColor('#4ec9b0'),
+    'brown':         QColor('#dcdcaa'),   # pyte uses 'brown' for dark yellow
+    'blue':          QColor('#4fc3f7'),
+    'magenta':       QColor('#c678dd'),
+    'cyan':          QColor('#56b6c2'),
+    'white':         QColor('#d4d4d4'),
+    'brightblack':   QColor('#4a4a4a'),
+    'brightred':     QColor('#f47a7a'),
+    'brightgreen':   QColor('#6ef7d8'),
+    'brightyellow':  QColor('#ffffa0'),
+    'brightblue':    QColor('#90d0ff'),
+    'brightmagenta': QColor('#e090f0'),
+    'brightcyan':    QColor('#80e0e8'),
+    'brightwhite':   QColor('#ffffff'),
+}
 
-    def __init__(self, swarm_manager, service_name, image_name):
-        super().__init__()
-        self.swarm_manager = swarm_manager
-        self.service_name = service_name
-        self.image_name = image_name
+def _256_color(n: int) -> QColor:
+    """Convert a 256-palette index to QColor."""
+    if n < 16:
+        return list(_ANSI_COLORS.values())[n]
+    if n < 232:           # 6×6×6 RGB cube
+        n -= 16
+        b = n % 6;  g = (n // 6) % 6;  r = n // 36
+        v = lambda x: 0 if x == 0 else 55 + x * 40
+        return QColor(v(r), v(g), v(b))
+    val = 8 + (n - 232) * 10   # grayscale ramp
+    return QColor(val, val, val)
 
-    def run(self):
-        result = self.swarm_manager.deploy_service(self.service_name, self.image_name)
-        self.result.emit(result)
+_KEY_MAP: dict = {
+    Qt.Key_Return:    b'\r',
+    Qt.Key_Enter:     b'\r',
+    Qt.Key_Backspace: b'\x7f',
+    Qt.Key_Tab:       b'\t',
+    Qt.Key_Escape:    b'\x1b',
+    Qt.Key_Up:        b'\x1b[A',
+    Qt.Key_Down:      b'\x1b[B',
+    Qt.Key_Right:     b'\x1b[C',
+    Qt.Key_Left:      b'\x1b[D',
+    Qt.Key_Home:      b'\x1b[H',
+    Qt.Key_End:       b'\x1b[F',
+    Qt.Key_PageUp:    b'\x1b[5~',
+    Qt.Key_PageDown:  b'\x1b[6~',
+    Qt.Key_Delete:    b'\x1b[3~',
+    Qt.Key_Insert:    b'\x1b[2~',
+    Qt.Key_F1:        b'\x1bOP',
+    Qt.Key_F2:        b'\x1bOQ',
+    Qt.Key_F3:        b'\x1bOR',
+    Qt.Key_F4:        b'\x1bOS',
+    Qt.Key_F5:        b'\x1b[15~',
+    Qt.Key_F6:        b'\x1b[17~',
+    Qt.Key_F7:        b'\x1b[18~',
+    Qt.Key_F8:        b'\x1b[19~',
+    Qt.Key_F9:        b'\x1b[20~',
+    Qt.Key_F10:       b'\x1b[21~',
+    Qt.Key_F11:       b'\x1b[23~',
+    Qt.Key_F12:       b'\x1b[24~',
+}
 
 
-class SwarmThread(QThread):
-    result = pyqtSignal(str)
+# ---------------------------------------------------------------------------
+# PTY + pyte terminal emulator widget
+# ---------------------------------------------------------------------------
 
-    def __init__(self, swarm_manager, action, *args):
-        super().__init__()
-        self.swarm_manager = swarm_manager
-        self.action = action
-        self.args = args
+class ShellWidget(QWidget):
+    """
+    Full VT100/XTERM terminal emulator.
 
-    def run(self):
-        try:
-            if self.action == "initialize":
-                result = self.swarm_manager.initialize_swarm()
-            elif self.action == "leave":
-                result = self.swarm_manager.leave_swarm()
-            elif self.action == "scale":
-                result = self.swarm_manager.scale_service(*self.args)
-            elif self.action == "deploy":
-                result = self.swarm_manager.deploy_service(*self.args)
-            elif self.action == "view_nodes":
-                result = self.swarm_manager.view_nodes()
-            else:
-                result = "Invalid action."
-            self.result.emit(result)
-        except Exception as e:
-            self.result.emit(f"Error: {e}")
+    Features:
+    - pyte.HistoryScreen: 2000-line scrollback buffer
+    - QPainter cell-by-cell rendering (256 colours, bold, underline, reverse)
+    - PTY master/slave pair + automatic TIOCSWINSZ size sync
+    - Scrolling: mouse wheel + Shift+PageUp/Down
+    - Ctrl+C/D/Z and all control codes go to the PTY, not the application
+    - Screen state is preserved across container switches
+    """
 
+    _DEFAULT_FG = QColor('#c8c8c8')
+    _DEFAULT_BG = QColor('#0d0d0d')
+    _CURSOR_COL = QColor('#4fc3f7')
+    _SCROLL_IND = QColor('#264f78')     # scroll position indicator bar
 
-class HelpDialog(QDialog):
+    _HISTORY    = 2000                  # number of lines kept in history
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Help")
-        self.setGeometry(150, 150, 400, 300)
+        self.binary     = "docker"
+        self.process    = None
+        self.master_fd  = None
+        self.notifier   = None
+        self._connected = False
+        self._scroll_offset = 0         # 0 = bottom (live view), N = scrolled N lines up
+
+        # Monospace font + cell metrics
+        self._font = QFont("Monospace", 11)
+        self._font.setStyleHint(QFont.Monospace)
+        fm = QFontMetrics(self._font)
+        self._cw = max(fm.horizontalAdvance('M'), 1)
+        self._ch = max(fm.height(), 1)
+
+        self._cols = 80
+        self._rows = 24
+        self._init_screen()
+
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setCursor(Qt.IBeamCursor)
+        self.setAttribute(Qt.WA_OpaquePaintEvent)
+        self.setMinimumSize(self._cw * 40, self._ch * 10)
+        self.setStyleSheet("background-color: #0d0d0d;")
+
+    # ── pyte ──────────────────────────────────────────────────────────────
+
+    def _init_screen(self):
+        self._screen = pyte.HistoryScreen(self._cols, self._rows,
+                                          history=self._HISTORY)
+        self._stream = pyte.Stream(self._screen)
+
+    # ── Resize ────────────────────────────────────────────────────────────
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        new_cols = max(self.width()  // self._cw, 10)
+        new_rows = max(self.height() // self._ch,  5)
+        if new_cols != self._cols or new_rows != self._rows:
+            self._cols = new_cols
+            self._rows = new_rows
+            self._screen.resize(self._rows, self._cols)
+            self._push_pty_size()
+
+    def _push_pty_size(self):
+        if self.master_fd is None:
+            return
+        try:
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ,
+                        struct.pack('HHHH', self._rows, self._cols, 0, 0))
+        except OSError:
+            pass
+
+    # ── Scrollback helpers ────────────────────────────────────────────────
+
+    def _max_scroll(self) -> int:
+        return len(self._screen.history.top)
+
+    def _scroll_by(self, lines: int):
+        """Positive = scroll up (into history), negative = scroll down."""
+        self._scroll_offset = max(0, min(
+            self._scroll_offset + lines, self._max_scroll()
+        ))
+        self.update()
+
+    def _get_display_lines(self) -> list:
+        """
+        Return self._rows line dicts to render.
+        Each dict maps col index → pyte.Char.
+        At offset 0 returns the live screen buffer.
+        """
+        if self._scroll_offset == 0:
+            return [self._screen.buffer[r] for r in range(self._rows)]
+
+        history = list(self._screen.history.top)
+        n_hist  = len(history)
+        total   = n_hist + self._rows
+        end     = total - self._scroll_offset
+        start   = max(0, end - self._rows)
+
+        lines = []
+        for i in range(start, end):
+            lines.append(history[i] if i < n_hist
+                         else self._screen.buffer[i - n_hist])
+        # Pad with empty dicts if we hit the very beginning of history
+        while len(lines) < self._rows:
+            lines.insert(0, {})
+        return lines
+
+    # ── Painting ──────────────────────────────────────────────────────────
+
+    def paintEvent(self, _event):
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.fillRect(self.rect(), self._DEFAULT_BG)
+
+        if not self._connected:
+            painter.setPen(QColor('#6a6a6a'))
+            painter.drawText(self.rect(), Qt.AlignCenter,
+                             "Select a running container…")
+            painter.end()
+            return
+
+        lines    = self._get_display_lines()
+        scrolled = self._scroll_offset > 0
+        # Hide cursor when scrolled back
+        cursor_x = self._screen.cursor.x if not scrolled else -1
+        cursor_y = self._screen.cursor.y if not scrolled else -1
+
+        for row, line in enumerate(lines):
+            for col in range(self._cols):
+                char = line.get(col)
+                if char is None:
+                    continue
+
+                fg = self._color(char.fg, fg=True)
+                bg = self._color(char.bg, fg=False)
+
+                if char.reverse:
+                    fg, bg = bg, fg
+
+                is_cursor = (col == cursor_x and row == cursor_y)
+                x = col * self._cw
+                y = row * self._ch
+
+                cell_bg = self._CURSOR_COL if is_cursor else bg
+                if cell_bg != self._DEFAULT_BG:
+                    painter.fillRect(x, y, self._cw, self._ch, cell_bg)
+
+                glyph = char.data
+                if glyph and glyph != ' ':
+                    if char.bold:
+                        f = QFont(self._font)
+                        f.setBold(True)
+                        painter.setFont(f)
+                    else:
+                        painter.setFont(self._font)
+                    text_fg = self._DEFAULT_BG if is_cursor else fg
+                    painter.setPen(text_fg)
+                    painter.drawText(x, y, self._cw, self._ch,
+                                     Qt.AlignLeft | Qt.AlignVCenter, glyph)
+
+                if char.underscore:
+                    painter.setPen(fg)
+                    painter.drawLine(x, y + self._ch - 2,
+                                     x + self._cw - 1, y + self._ch - 2)
+
+        # Scroll position indicator (right edge, 3px wide)
+        if scrolled and self._max_scroll() > 0:
+            ratio     = self._scroll_offset / self._max_scroll()
+            bar_h     = self.height()
+            thumb_h   = max(20, int(bar_h * self._rows /
+                                    (self._max_scroll() + self._rows)))
+            thumb_y   = int((bar_h - thumb_h) * (1.0 - ratio))
+            painter.fillRect(self.width() - 3, 0, 3, bar_h,
+                             QColor('#2a2a2a'))
+            painter.fillRect(self.width() - 3, thumb_y, 3, thumb_h,
+                             self._SCROLL_IND)
+
+        painter.end()
+
+    def _color(self, val: str, fg: bool) -> QColor:
+        if val == 'default' or not val:
+            return self._DEFAULT_FG if fg else self._DEFAULT_BG
+        if val in _ANSI_COLORS:
+            return _ANSI_COLORS[val]
+        if len(val) == 6:
+            try:
+                return QColor('#' + val)
+            except Exception:
+                pass
+        return self._DEFAULT_FG if fg else self._DEFAULT_BG
+
+    # ── Keyboard ──────────────────────────────────────────────────────────
+
+    def keyPressEvent(self, event):
+        key  = event.key()
+        mods = event.modifiers()
+        text = event.text()
+
+        # ── Scrollback shortcuts (Shift+PgUp / Shift+PgDn) ──
+        if mods & Qt.ShiftModifier:
+            if key == Qt.Key_PageUp:
+                self._scroll_by(self._rows)
+                event.accept()
+                return
+            if key == Qt.Key_PageDown:
+                self._scroll_by(-self._rows)
+                event.accept()
+                return
+
+        # ── Nothing to do if not connected ──────────────────
+        if self.master_fd is None:
+            super().keyPressEvent(event)
+            return
+
+        # Any keypress while scrolled → jump to bottom first
+        if self._scroll_offset > 0:
+            self._scroll_offset = 0
+
+        seq = _KEY_MAP.get(key)
+
+        # Ctrl+A…Z → \x01–\x1A
+        # Use the key code directly — event.text() returns an empty string
+        # for Ctrl+letter on some Qt/Linux configurations.
+        if seq is None and (mods & Qt.ControlModifier):
+            if Qt.Key_A <= key <= Qt.Key_Z:
+                seq = bytes([key - Qt.Key_A + 1])
+
+        if seq is None and text:
+            seq = text.encode('utf-8')
+
+        if seq:
+            try:
+                os.write(self.master_fd, seq)
+            except OSError:
+                self.disconnect_shell()
+            event.accept()      # prevent Qt from processing the event further
+        else:
+            super().keyPressEvent(event)
+
+    def wheelEvent(self, event):
+        """Mouse wheel → scroll the history buffer."""
+        delta = event.angleDelta().y()   # positive = scroll up
+        lines = (delta // 40) * 3        # ~3 lines per wheel notch
+        self._scroll_by(lines)
+        event.accept()
+
+    def mousePressEvent(self, _event):
+        self.setFocus()
+
+    # ── Connection ────────────────────────────────────────────────────────
+
+    def connect_container(self, container_id, container_name):
+        self.disconnect_shell()
+        self._cols = max(self.width()  // self._cw, 10)
+        self._rows = max(self.height() // self._ch,  5)
+        self._init_screen()
+        self._scroll_offset = 0
+        try:
+            self.master_fd, slave_fd = pty.openpty()
+
+            # ── Disable ISIG on the slave PTY ────────────────────────────
+            # By default the slave PTY has ISIG=on, meaning \x03 (Ctrl+C)
+            # generates SIGINT for the slave's process (docker exec), which
+            # then exits and drops the connection. With ISIG=off, \x03 is
+            # treated as a plain data byte that passes through docker exec
+            # to the container's internal PTY, where bash receives SIGINT
+            # and interrupts the current command — the correct behaviour.
+            attrs = termios.tcgetattr(slave_fd)
+            attrs[3] &= ~(termios.ISIG | termios.IXON)   # c_lflag, c_iflag
+            termios.tcsetattr(slave_fd, termios.TCSANOW, attrs)
+
+            self._push_pty_size()
+            self.process = subprocess.Popen(
+                [self.binary, 'exec', '-it', container_id,
+                 '/bin/sh', '-c', 'bash 2>/dev/null || sh'],
+                stdin=slave_fd, stdout=slave_fd, stderr=slave_fd,
+                close_fds=True,
+            )
+            os.close(slave_fd)
+            self._connected = True
+            self._start_notifier()
+            self.setFocus()
+            self.update()
+        except Exception as e:
+            self._connected = False
+            self.update()
+
+    def _detach(self):
+        """Pause reading – keep the PTY and process alive."""
+        self._stop_notifier()
+
+    def _reattach(self, process, master_fd, screen, container_name):
+        """Restore a previously saved session."""
+        self._stop_notifier()
+        self.process    = process
+        self.master_fd  = master_fd
+        if screen is not None:
+            self._screen = screen
+            self._stream = pyte.Stream(self._screen)
+        self._connected     = True
+        self._scroll_offset = 0
+        self._push_pty_size()
+        self._start_notifier()
+        self.setFocus()
+        self.update()
+
+    def disconnect_shell(self):
+        self._stop_notifier()
+        self._connected = False
+        if self.process:
+            try:
+                self.process.terminate()
+                self.process.wait(timeout=2)
+            except Exception:
+                pass
+            self.process = None
+        if self.master_fd is not None:
+            try:
+                os.close(self.master_fd)
+            except OSError:
+                pass
+            self.master_fd = None
+        self.update()
+
+    # ── Notifier ──────────────────────────────────────────────────────────
+
+    def _start_notifier(self):
+        from PyQt5.QtCore import QSocketNotifier
+        if self.master_fd is not None:
+            self.notifier = QSocketNotifier(
+                self.master_fd, QSocketNotifier.Read, self)
+            self.notifier.activated.connect(self._read_output)
+
+    def _stop_notifier(self):
+        if self.notifier:
+            self.notifier.setEnabled(False)
+            self.notifier.activated.disconnect()
+            self.notifier = None
+
+    def _read_output(self):
+        if self.master_fd is None:
+            return
+        try:
+            data = os.read(self.master_fd, 4096)
+            if data:
+                prev_hist = len(self._screen.history.top)
+                self._stream.feed(data.decode('utf-8', errors='replace'))
+                # If the user has scrolled up, keep the scroll position stable
+                if self._scroll_offset > 0:
+                    pushed = len(self._screen.history.top) - prev_hist
+                    self._scroll_offset = min(
+                        self._scroll_offset + pushed,
+                        self._max_scroll()
+                    )
+                self.update()
+        except OSError:
+            self._stop_notifier()
+            self._connected = False
+            self.update()
 
 
-        layout = QVBoxLayout()
-
-        help_text = QLabel("Shortcut Keys:\n"
-                           "Ctrl+1: Toggle Image Actions\n"
-                           "Ctrl+2: Toggle Volume Actions\n"
-                           "Ctrl+3: Toggle Network Actions\n"
-                           "Ctrl+4: Toggle Other Actions\n"
-                           "\n"
-                           "The User can start, stop or pause containers on the container list. Find more actions under Image Actions button!\n"
-                           "Likewise Users can find buttons for volumes and networks. Under these buttons are the functions to create and list all details.\n"
-                           "Other actions button makes it possible to deploy docker-compose files, and swarms(AT YOUR OWN RISK!!). \n")
-
-        layout.addWidget(help_text)
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        button_box.accepted.connect(self.accept)
-        layout.addWidget(button_box)
-
-        self.setLayout(layout)
-
-
+# ---------------------------------------------------------------------------
+# Pull image thread
+# ---------------------------------------------------------------------------
 
 class PullImageThread(QThread):
-    progress = pyqtSignal(str)  # Signal to update progress
+    progress = pyqtSignal(str)
 
     def __init__(self, client, repository):
         super().__init__()
@@ -123,1888 +632,1506 @@ class PullImageThread(QThread):
 
     def run(self):
         try:
-            self.progress.emit("Starting pull...")
+            self.progress.emit("Starting pull…")
             for chunk in self.client.api.pull(self.repository, stream=True, decode=True):
                 if 'status' in chunk:
-                    self.progress.emit(chunk['status'])
+                    msg = chunk['status']
+                    if 'progressDetail' in chunk and chunk['progressDetail']:
+                        detail = chunk['progressDetail']
+                        if 'current' in detail and 'total' in detail:
+                            pct = int(detail['current'] / detail['total'] * 100)
+                            msg += f" {pct}%"
+                    self.progress.emit(msg)
             self.progress.emit("Pull complete!")
         except docker.errors.APIError as e:
             self.progress.emit(f"API error: {e}")
         except Exception as e:
-            self.progress.emit(f"Unexpected error: {e}")
+            self.progress.emit(f"Error: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Container button
+# ---------------------------------------------------------------------------
+
+class ContainerButton(QPushButton):
+    _STATUS = {
+        'running': ('#1a3a2a', '#4ec9b0'),
+        'paused':  ('#3a3000', '#dcdcaa'),
+        'exited':  ('#3a0d0d', '#f44747'),
+        'created': ('#1e2a3a', '#9cdcfe'),
+    }
+
+    def __init__(self, container):
+        super().__init__()
+        self.container = container
+        self.setCheckable(True)
+        self._apply_style()
+
+    def _apply_style(self):
+        status = self.container.status
+        bg, fg = self._STATUS.get(status, ('#2a2a2a', '#9d9d9d'))
+        self.setText(f"  {self.container.name}")
+        self.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {bg};
+                color: {fg};
+                border: 1px solid {fg}55;
+                border-radius: 4px;
+                padding: 6px 14px;
+                font-weight: bold;
+                min-width: 110px;
+                text-align: left;
+            }}
+            QPushButton:hover {{ border-color: {fg}; }}
+            QPushButton:checked {{ border: 2px solid {fg}; }}
+        """)
+
+
+# ---------------------------------------------------------------------------
+# Containers view
+# ---------------------------------------------------------------------------
+
+class ContainersView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, docker_client, logger):
+        super().__init__()
+        self.docker_client = docker_client
+        self.logger = logger
+        self.selected_container = None
+        self.container_buttons = []
+        self.monitor_windows = {}
+        self.resource_thread = None
+        self.shell_sessions = {}   # container_id -> {'process': ..., 'thread': ..., 'text': ...}
+        self._switching = False    # guard against refresh during container switch
+        self.podman_caps = None    # PodmanCapabilities | None – set by DockerGui
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(6)
+
+        # ── Container buttons row ──────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setFixedHeight(50)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setStyleSheet(
+            "background: #252526; border-radius: 4px; border: 1px solid #3a3a3a;"
+        )
+        self.btn_container = QWidget()
+        self.btn_container.setStyleSheet("background: transparent;")
+        self.btn_layout = QHBoxLayout(self.btn_container)
+        self.btn_layout.setContentsMargins(6, 4, 6, 4)
+        self.btn_layout.setSpacing(6)
+        self.btn_layout.addStretch()
+        scroll.setWidget(self.btn_container)
+        layout.addWidget(scroll)
+
+        # ── Main splitter: left actions | shell ───────────────────────────
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left panel
+        left = QWidget()
+        left.setFixedWidth(190)
+        left.setStyleSheet("background: #252526; border-radius: 4px;")
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(8, 8, 8, 8)
+        ll.setSpacing(4)
+
+        def section_label(text):
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                "color: #6a6a6a; font-size: 10px; font-weight: bold; padding: 6px 0 2px 0;"
+            )
+            return lbl
+
+        ll.addWidget(section_label("ACTIONS"))
+
+        for icon, label, func in [
+            ("▶", "Start",    self.start_container),
+            ("■", "Stop",     self.stop_container),
+            ("⏸", "Pause",    self.pause_container),
+            ("▷", "Unpause",  self.unpause_container),
+            ("📋", "Logs",    self.open_logs),
+            ("🔍", "Inspect", self.inspect_container),
+            ("🗑", "Remove",  self.remove_container),
+        ]:
+            btn = QPushButton(f"{icon}  {label}")
+            btn.setStyleSheet(ACTION_BTN_STYLE)
+            btn.clicked.connect(func)
+            ll.addWidget(btn)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #3a3a3a; margin: 4px 0;")
+        ll.addWidget(sep)
+
+        ll.addWidget(section_label("RESOURCES"))
+
+        def resource_row(label_text, color):
+            row = QHBoxLayout()
+            row.setSpacing(4)
+            lbl = QLabel(label_text)
+            lbl.setFixedWidth(32)
+            lbl.setStyleSheet("color: #6a6a6a; font-size: 11px;")
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(0)
+            bar.setTextVisible(False)
+            bar.setFixedHeight(5)
+            bar.setStyleSheet(
+                f"QProgressBar {{ background: #2d2d2d; border: none; border-radius: 2px; }}"
+                f"QProgressBar::chunk {{ background: {color}; border-radius: 2px; }}"
+            )
+            val = QLabel("—")
+            val.setStyleSheet(f"color: {color}; font-size: 11px; min-width: 42px;")
+            row.addWidget(lbl)
+            row.addWidget(bar, 1)
+            row.addWidget(val)
+            return row, bar, val
+
+        cpu_row, self.cpu_bar, self.cpu_val = resource_row("CPU", "#4fc3f7")
+        ram_row, self.ram_bar, self.ram_val = resource_row("RAM", "#4ec9b0")
+        disk_row, self.disk_bar, self.disk_val = resource_row("DSK", "#dcdcaa")
+        ll.addLayout(cpu_row)
+        ll.addLayout(ram_row)
+        ll.addLayout(disk_row)
+
+        self.graph_btn = QPushButton("📊  Open Monitor")
+        self.graph_btn.setStyleSheet(MONITOR_BTN_STYLE)
+        self.graph_btn.setEnabled(True)
+        self.graph_btn.clicked.connect(self.open_monitor)
+        ll.addWidget(self.graph_btn)
+
+        ll.addStretch()
+        splitter.addWidget(left)
+
+        # Shell
+        self.shell = ShellWidget()
+        splitter.addWidget(self.shell)
+        splitter.setSizes([190, 700])
+
+        layout.addWidget(splitter, 1)
+
+    # ── Container refresh ──────────────────────────────────────────────────
+
+    def refresh(self):
+        if self._switching:
+            return
+        selected_id = self.selected_container.id if self.selected_container else None
+
+        for btn in self.container_buttons:
+            btn.setParent(None)
+        self.container_buttons.clear()
+        # Remove last stretch
+        item = self.btn_layout.takeAt(self.btn_layout.count() - 1)
+        if item:
+            del item
+
+        try:
+            containers = self.docker_client.containers.list(all=True)
+        except Exception as e:
+            self.log_message.emit(f"Error listing containers: {e}")
+            containers = []
+
+        for c in containers:
+            btn = ContainerButton(c)
+            if selected_id and c.id == selected_id:
+                btn.setChecked(True)
+            btn.clicked.connect(lambda _, container=c: self.select_container(container))
+            self.btn_layout.addWidget(btn)
+            self.container_buttons.append(btn)
+
+        self.btn_layout.addStretch()
+
+    def select_container(self, container):
+        if self._switching:
+            return
+        # Skip if same container already selected
+        if self.selected_container and self.selected_container.id == container.id:
+            return
+        self._switching = True
+        try:
+            for btn in self.container_buttons:
+                btn.setChecked(btn.container.id == container.id)
+
+            # Save current shell state before switching
+            if self.selected_container:
+                prev_id = self.selected_container.id
+                self.shell_sessions[prev_id] = {
+                    'screen':    self.shell._screen,
+                    'process':   self.shell.process,
+                    'master_fd': self.shell.master_fd,
+                }
+                self.shell._detach()
+
+            self.selected_container = container
+            self.log_message.emit(f"Selected: {container.name}  [{container.status}]")
+            self._stop_resource_monitor()
+
+            if container.status == 'running':
+                self._start_resource_monitor(container)
+                session = self.shell_sessions.get(container.id)
+                if session and session.get('process') and session['process'].poll() is None:
+                    self.shell._reattach(
+                        session['process'],
+                        session.get('master_fd'),
+                        session.get('screen'),
+                        container.name,
+                    )
+                else:
+                    self.shell_sessions.pop(container.id, None)
+                    self.shell.connect_container(container.id, container.name)
+            else:
+                self.shell.disconnect_shell()
+        finally:
+            self._switching = False
+
+    # ── Resource monitor ───────────────────────────────────────────────────
+
+    def _start_resource_monitor(self, container):
+        self.resource_thread = ResourceMonitorThread(container)
+        self.resource_thread.update_graph.connect(self._update_resources)
+        self.resource_thread.start()
+
+    def _stop_resource_monitor(self):
+        if self.resource_thread:
+            try:
+                self.resource_thread.update_graph.disconnect()
+            except Exception:
+                pass
+            self.resource_thread.stop()
+            # Wait up to 1.5 s for the thread to exit cleanly.
+            # Without this, Python's GC may destroy the QThread object while
+            # it is still running, which triggers Qt's fatal abort (SIGABRT).
+            self.resource_thread.wait(1500)
+            self.resource_thread = None
+        for bar, val in [
+            (self.cpu_bar, self.cpu_val),
+            (self.ram_bar, self.ram_val),
+            (self.disk_bar, self.disk_val),
+        ]:
+            bar.setValue(0)
+            val.setText("—")
+
+    def _update_resources(self, cpu, ram, disk):
+        self.cpu_bar.setValue(int(min(cpu, 100)))
+        self.cpu_val.setText(f"{cpu:.1f}%")
+        self.ram_bar.setValue(int(min(ram / 20, 100)))
+        self.ram_val.setText(f"{ram:.0f}M")
+        self.disk_bar.setValue(int(min(disk, 100)))
+        self.disk_val.setText(f"{disk:.1f}M")
+
+    # ── Helpers ────────────────────────────────────────────────────────────
+
+    def _get_selected(self):
+        if not self.selected_container:
+            self.log_message.emit("No container selected.")
+            return None
+        try:
+            return self.docker_client.containers.get(self.selected_container.id)
+        except Exception as e:
+            self.log_message.emit(f"Error: {e}")
+            return None
+
+    # ── Actions ────────────────────────────────────────────────────────────
+
+    def start_container(self):
+        c = self._get_selected()
+        if c:
+            try:
+                c.start()
+                self.log_message.emit(f"Started: {c.name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error starting: {e}")
+
+    def stop_container(self):
+        c = self._get_selected()
+        if c:
+            try:
+                c.stop()
+                self.log_message.emit(f"Stopped: {c.name}")
+                self._stop_resource_monitor()
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error stopping: {e}")
+
+    def pause_container(self):
+        c = self._get_selected()
+        if c:
+            if c.status != 'running':
+                self.log_message.emit(f"{c.name} is not running.")
+                return
+            # Pause does not work with Podman + cgroups v1
+            if self.podman_caps is not None and not self.podman_caps.pause_supported:
+                self.log_message.emit(
+                    f"⚠  Pause unavailable: Podman requires cgroups v2. "
+                    f"Check: /sys/fs/cgroup/cgroup.controllers"
+                )
+                return
+            try:
+                c.pause()
+                self.log_message.emit(f"Paused: {c.name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error pausing: {e}")
+
+    def unpause_container(self):
+        c = self._get_selected()
+        if c:
+            try:
+                c.unpause()
+                self.log_message.emit(f"Unpaused: {c.name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error unpausing: {e}")
+
+    def open_shell(self):
+        c = self._get_selected()
+        if c:
+            if c.status != 'running':
+                self.log_message.emit(f"{c.name} is not running – cannot open shell.")
+                return
+            self.shell.connect_container(c.id, c.name)
+
+    def open_logs(self):
+        c = self._get_selected()
+        if c:
+            try:
+                logs = c.logs(tail=200).decode('utf-8', errors='replace')
+                self.log_message.emit(f"── Logs: {c.name} ──\n{logs}")
+            except Exception as e:
+                self.log_message.emit(f"Error fetching logs: {e}")
+
+    def inspect_container(self):
+        c = self._get_selected()
+        if c:
+            import json
+            info = json.dumps(c.attrs, indent=2)
+            self.log_message.emit(f"── Inspect: {c.name} ──\n{info}")
+
+    def remove_container(self):
+        c = self._get_selected()
+        if c:
+            reply = QMessageBox.question(
+                self, 'Remove Container',
+                f"Remove container '{c.name}'?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                try:
+                    c.remove(force=True)
+                    self.log_message.emit(f"Removed: {c.name}")
+                    self.selected_container = None
+                    self.shell.disconnect_shell()
+                    self._stop_resource_monitor()
+                    # Close floating monitor window if open for this container
+                    if c.id in self.monitor_windows:
+                        win, thread = self.monitor_windows.pop(c.id)
+                        thread.stop()
+                        win.close()
+                    self.refresh()
+                except Exception as e:
+                    self.log_message.emit(f"Error removing: {e}")
+
+    def open_monitor(self):
+        c = self._get_selected()
+        if not c or c.status != 'running':
+            self.log_message.emit("Select a running container to open the resource monitor.")
+            return
+        if c.id not in self.monitor_windows:
+            win = QWidget()
+            win.setWindowTitle(f"Resource Monitor – {c.name}")
+            win.setGeometry(200, 200, 900, 600)
+            win.setStyleSheet(DARK_THEME)
+            layout = QVBoxLayout(win)
+            graph = ResourceGraphWidget(c.name)
+            layout.addWidget(graph)
+            thread = ResourceMonitorThread(c)
+            thread.update_graph.connect(graph.update_graph)
+            thread.start()
+            win.show()
+
+            def on_close(event, t=thread):
+                try:
+                    t.update_graph.disconnect()
+                except Exception:
+                    pass
+                t.stop()
+                t.wait(1500)
+                event.accept()
+
+            win.closeEvent = on_close
+            self.monitor_windows[c.id] = (win, thread)
+        else:
+            self.monitor_windows[c.id][0].show()
+            self.monitor_windows[c.id][0].raise_()
+
+
+# ---------------------------------------------------------------------------
+# Images view
+# ---------------------------------------------------------------------------
+
+class ImagesView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, docker_client, logger):
+        super().__init__()
+        self.docker_client = docker_client
+        self.logger = logger
+        self.pull_thread = None
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        toolbar = QHBoxLayout()
+        pull_btn = QPushButton("⬇  Pull Image")
+        pull_btn.setStyleSheet(TABLE_BTN_STYLE)
+        pull_btn.clicked.connect(self.pull_image)
+        toolbar.addWidget(pull_btn)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["ID", "Tags", "Remove", "Tag", "Push", "Run"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setStyleSheet("alternate-background-color: #252526;")
+        layout.addWidget(self.table, 1)
+
+    def refresh(self):
+        try:
+            images = self.docker_client.images.list()
+        except Exception as e:
+            self.log_message.emit(f"Error listing images: {e}")
+            return
+
+        self.table.setRowCount(len(images))
+        for row, img in enumerate(images):
+            tags = ', '.join(img.tags) if img.tags else img.short_id
+            self.table.setItem(row, 0, QTableWidgetItem(img.short_id))
+            self.table.setItem(row, 1, QTableWidgetItem(tags))
+
+            rm_btn = QPushButton("Remove")
+            rm_btn.setStyleSheet(DANGER_BTN_STYLE)
+            rm_btn.clicked.connect(lambda _, i=img: self._remove_image(i))
+            self.table.setCellWidget(row, 2, rm_btn)
+
+            tag_btn = QPushButton("Tag")
+            tag_btn.setStyleSheet(TABLE_BTN_STYLE)
+            tag_btn.clicked.connect(lambda _, i=img: self._tag_image(i))
+            self.table.setCellWidget(row, 3, tag_btn)
+
+            push_btn = QPushButton("Push")
+            push_btn.setStyleSheet(TABLE_BTN_STYLE)
+            push_btn.clicked.connect(lambda _, i=img: self._push_image(i))
+            self.table.setCellWidget(row, 4, push_btn)
+
+            run_btn = QPushButton("Run")
+            run_btn.setStyleSheet(TABLE_BTN_STYLE)
+            menu = QMenu()
+            menu.setStyleSheet("background: #2d2d2d; color: #d4d4d4; border: 1px solid #3a3a3a;")
+            menu.addAction("Run (default)", lambda i=img: self._run_image(i))
+            menu.addAction("Run (keep alive)", lambda i=img: self._run_image_keepalive(i))
+            menu.addAction("Run with params…", lambda i=img: self._run_image_params(i))
+            run_btn.setMenu(menu)
+            self.table.setCellWidget(row, 5, run_btn)
+
+    def pull_image(self):
+        try:
+            socket.create_connection(("8.8.8.8", 53), timeout=5)
+        except OSError:
+            self.log_message.emit("No internet connection.")
+            return
+
+        repo, ok = QInputDialog.getText(
+            self, "Pull Image", "Image name (e.g. ubuntu:latest):"
+        )
+        if not ok or not repo:
+            return
+
+        progress = QProgressDialog("Pulling image…", "Cancel", 0, 0, self)
+        progress.setWindowTitle("Pull Image")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.show()
+
+        self.pull_thread = PullImageThread(self.docker_client, repo)
+        self.pull_thread.progress.connect(
+            lambda msg: (self.log_message.emit(msg), progress.setLabelText(msg))
+        )
+        self.pull_thread.finished.connect(progress.close)
+        self.pull_thread.finished.connect(self.refresh)
+        self.pull_thread.start()
+
+    def _remove_image(self, img):
+        reply = QMessageBox.question(
+            self, 'Remove Image', f"Remove image {img.short_id}?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                self.docker_client.images.remove(img.id, force=True)
+                self.log_message.emit(f"Removed image: {img.short_id}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error removing image: {e}")
+
+    def _tag_image(self, img):
+        tag, ok = QInputDialog.getText(self, "Tag Image", "New tag:")
+        if ok and tag:
+            try:
+                img.tag(tag)
+                self.log_message.emit(f"Tagged {img.short_id} as {tag}")
+            except Exception as e:
+                self.log_message.emit(f"Error tagging: {e}")
+
+    def _push_image(self, img):
+        repo, ok = QInputDialog.getText(self, "Push Image", "Repository:")
+        if ok and repo:
+            try:
+                self.docker_client.images.push(repo)
+                self.log_message.emit(f"Pushed {img.short_id} to {repo}")
+            except Exception as e:
+                self.log_message.emit(f"Error pushing: {e}")
+
+    def _run_image(self, img):
+        try:
+            exposed = img.attrs.get('Config', {}).get('ExposedPorts', {})
+            ports = {p: ('0.0.0.0', int(p.split('/')[0])) for p in exposed}
+            container = self.docker_client.containers.run(
+                img.id, detach=True, network_mode="bridge", ports=ports
+            )
+            self.log_message.emit(f"Started container {container.short_id} from {img.short_id}")
+        except Exception as e:
+            self.log_message.emit(f"Error running image: {e}")
+
+    def _run_image_keepalive(self, img):
+        """Run container with sleep infinity so it stays alive indefinitely."""
+        try:
+            tags = img.tags
+            name = tags[0].replace(':', '_').replace('/', '_') if tags else img.short_id
+            name = f"{name}_keepalive"
+            container = self.docker_client.containers.run(
+                img.id,
+                command="sleep infinity",
+                name=name,
+                detach=True,
+                network_mode="bridge",
+            )
+            self.log_message.emit(
+                f"Started keep-alive container '{container.name}' ({container.short_id})"
+            )
+        except Exception as e:
+            self.log_message.emit(f"Error starting keep-alive container: {e}")
+
+    def _run_image_params(self, img):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Run with Parameters")
+        layout = QFormLayout(dialog)
+
+        cpu_spin = QSpinBox()
+        cpu_spin.setRange(1, 32)
+        mem_spin = QSpinBox()
+        mem_spin.setRange(64, 32768)
+        mem_spin.setValue(512)
+        cmd_edit = QLineEdit()
+        cmd_edit.setPlaceholderText("sleep infinity  (leave empty for image default)")
+        ports_edit = QLineEdit()
+        ports_edit.setPlaceholderText("8080:80, 443:443")
+        vols_edit = QLineEdit()
+        vols_edit.setPlaceholderText("/host:/container")
+        env_edit = QLineEdit()
+        env_edit.setPlaceholderText("KEY=VALUE, KEY2=VALUE2")
+        restart_combo = QComboBox()
+        restart_combo.addItems(["no", "always", "unless-stopped", "on-failure"])
+
+        layout.addRow("CPUs:", cpu_spin)
+        layout.addRow("Memory (MB):", mem_spin)
+        layout.addRow("Command:", cmd_edit)
+        layout.addRow("Ports:", ports_edit)
+        layout.addRow("Volumes:", vols_edit)
+        layout.addRow("Env vars:", env_edit)
+        layout.addRow("Restart:", restart_combo)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        run_args = {
+            'image': img.id, 'detach': True,
+            'cpu_quota': cpu_spin.value() * 100000,
+            'cpu_period': 100000,
+            'mem_limit': f"{mem_spin.value()}m",
+            'restart_policy': {'Name': restart_combo.currentText()},
+        }
+        if cmd_edit.text().strip():
+            run_args['command'] = cmd_edit.text().strip()
+        if ports_edit.text():
+            ports = {}
+            for p in ports_edit.text().split(','):
+                parts = p.strip().split(':')
+                if len(parts) == 2:
+                    ports[int(parts[1])] = int(parts[0])
+            run_args['ports'] = ports
+        if vols_edit.text():
+            vols = {}
+            for v in vols_edit.text().split(','):
+                parts = v.strip().split(':')
+                if len(parts) == 2:
+                    vols[parts[0]] = {'bind': parts[1], 'mode': 'rw'}
+            run_args['volumes'] = vols
+        if env_edit.text():
+            run_args['environment'] = dict(
+                e.split('=', 1) for e in env_edit.text().split(',') if '=' in e
+            )
+        try:
+            container = self.docker_client.containers.run(**run_args)
+            self.log_message.emit(f"Started container {container.short_id}")
+        except Exception as e:
+            self.log_message.emit(f"Error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Volumes view
+# ---------------------------------------------------------------------------
+
+class VolumesView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, docker_client, logger):
+        super().__init__()
+        self.docker_client = docker_client
+        self.logger = logger
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        toolbar = QHBoxLayout()
+        for label, func in [("＋  Create Volume", self._create), ("🧹  Prune Unused", self._prune)]:
+            btn = QPushButton(label)
+            btn.setStyleSheet(TABLE_BTN_STYLE)
+            btn.clicked.connect(func)
+            toolbar.addWidget(btn)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Name", "Driver", "Mountpoint", "Remove"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setStyleSheet("alternate-background-color: #252526;")
+        layout.addWidget(self.table, 1)
+
+    def refresh(self):
+        try:
+            volumes = self.docker_client.volumes.list()
+        except Exception as e:
+            self.log_message.emit(f"Error listing volumes: {e}")
+            return
+        self.table.setRowCount(len(volumes))
+        for row, vol in enumerate(volumes):
+            self.table.setItem(row, 0, QTableWidgetItem(vol.name))
+            self.table.setItem(row, 1, QTableWidgetItem(vol.attrs.get('Driver', '')))
+            self.table.setItem(row, 2, QTableWidgetItem(vol.attrs.get('Mountpoint', '')))
+            btn = QPushButton("Remove")
+            btn.setStyleSheet(DANGER_BTN_STYLE)
+            btn.clicked.connect(lambda _, v=vol: self._remove(v))
+            self.table.setCellWidget(row, 3, btn)
+
+    def _create(self):
+        name, ok = QInputDialog.getText(self, "Create Volume", "Volume name:")
+        if ok and name:
+            try:
+                self.docker_client.volumes.create(name=name)
+                self.log_message.emit(f"Volume created: {name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error: {e}")
+
+    def _prune(self):
+        reply = QMessageBox.question(
+            self, 'Prune Volumes', "Remove all unused volumes?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                result = self.docker_client.volumes.prune()
+                self.log_message.emit(f"Pruned volumes: {result}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error: {e}")
+
+    def _remove(self, vol):
+        reply = QMessageBox.question(
+            self, 'Remove Volume', f"Remove volume '{vol.name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                vol.remove()
+                self.log_message.emit(f"Removed volume: {vol.name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Networks view
+# ---------------------------------------------------------------------------
+
+class NetworksView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, docker_client, logger):
+        super().__init__()
+        self.docker_client = docker_client
+        self.logger = logger
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        toolbar = QHBoxLayout()
+        btn = QPushButton("＋  Create Network")
+        btn.setStyleSheet(TABLE_BTN_STYLE)
+        btn.clicked.connect(self._create)
+        toolbar.addWidget(btn)
+        toolbar.addStretch()
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Name", "ID", "Driver", "Scope", "Remove"])
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setStyleSheet("alternate-background-color: #252526;")
+        layout.addWidget(self.table, 1)
+
+    def refresh(self):
+        try:
+            networks = self.docker_client.networks.list()
+        except Exception as e:
+            self.log_message.emit(f"Error listing networks: {e}")
+            return
+        self.table.setRowCount(len(networks))
+        for row, net in enumerate(networks):
+            self.table.setItem(row, 0, QTableWidgetItem(net.name))
+            self.table.setItem(row, 1, QTableWidgetItem(net.short_id))
+            self.table.setItem(row, 2, QTableWidgetItem(net.attrs.get('Driver', '')))
+            self.table.setItem(row, 3, QTableWidgetItem(net.attrs.get('Scope', '')))
+            btn = QPushButton("Remove")
+            btn.setStyleSheet(DANGER_BTN_STYLE)
+            btn.clicked.connect(lambda _, n=net: self._remove(n))
+            self.table.setCellWidget(row, 4, btn)
+
+    def _create(self):
+        name, ok = QInputDialog.getText(self, "Create Network", "Network name:")
+        if ok and name:
+            try:
+                self.docker_client.networks.create(name=name, driver="bridge")
+                self.log_message.emit(f"Network created: {name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error: {e}")
+
+    def _remove(self, net):
+        reply = QMessageBox.question(
+            self, 'Remove Network', f"Remove network '{net.name}'?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                net.remove()
+                self.log_message.emit(f"Removed network: {net.name}")
+                self.refresh()
+            except Exception as e:
+                self.log_message.emit(f"Error: {e}")
+
+
+
+# ---------------------------------------------------------------------------
+# Compose thread
+# ---------------------------------------------------------------------------
+
+class ComposeThread(QThread):
+    output = pyqtSignal(str)
+    finished_ok = pyqtSignal()
+
+    def __init__(self, cmd: list[str], cwd: str):
+        super().__init__()
+        self.cmd = cmd
+        self.cwd = cwd
+
+    def run(self):
+        try:
+            proc = subprocess.Popen(
+                self.cmd,
+                cwd=self.cwd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            for line in proc.stdout:
+                self.output.emit(line.rstrip())
+            proc.wait()
+            if proc.returncode == 0:
+                self.finished_ok.emit()
+            else:
+                self.output.emit(f"⚠  Exit code: {proc.returncode}")
+        except FileNotFoundError:
+            self.output.emit(
+                f"❌  Command not found: {self.cmd[0]}\n"
+                "   Install: pip install podman-compose  |  sudo pacman -S docker-compose"
+            )
+        except Exception as e:
+            self.output.emit(f"❌  {e}")
+
+
+# ---------------------------------------------------------------------------
+# Compose view
+# ---------------------------------------------------------------------------
+
+class ComposeView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, logger):
+        super().__init__()
+        self.logger = logger
+        self.compose_file = None        # currently loaded compose file
+        self.compose_cmd = ["docker", "compose"]   # docker | podman-compose
+        self._thread = None
+        self._setup_ui()
+
+    # ── UI ─────────────────────────────────────────────────────────────────
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(6)
+
+        # ── File selector bar ─────────────────────────────────────────────
+        file_row = QHBoxLayout()
+        file_row.setSpacing(6)
+
+        self.file_label = QLabel("No compose file loaded")
+        self.file_label.setStyleSheet(
+            "color: #6a6a6a; background: #1e1e1e; border: 1px solid #3a3a3a;"
+            "border-radius: 4px; padding: 4px 8px;"
+        )
+        file_row.addWidget(self.file_label, 1)
+
+        open_btn = QPushButton("📂  Open")
+        open_btn.setStyleSheet(TABLE_BTN_STYLE)
+        open_btn.clicked.connect(self._open_file)
+        file_row.addWidget(open_btn)
+
+        reload_btn = QPushButton("↺  PS")
+        reload_btn.setStyleSheet(TABLE_BTN_STYLE)
+        reload_btn.setToolTip("Service status (compose ps)")
+        reload_btn.clicked.connect(self.refresh)
+        file_row.addWidget(reload_btn)
+
+        layout.addLayout(file_row)
+
+        # ── Main area: service table + output panel ────────────────────────
+        splitter = QSplitter(Qt.Horizontal)
+
+        # Left: service table + action buttons
+        left = QWidget()
+        left.setFixedWidth(220)
+        left.setStyleSheet("background: #252526; border-radius: 4px;")
+        ll = QVBoxLayout(left)
+        ll.setContentsMargins(8, 8, 8, 8)
+        ll.setSpacing(4)
+
+        svc_hdr = QLabel("SERVICES")
+        svc_hdr.setStyleSheet(
+            "color: #6a6a6a; font-size: 10px; font-weight: bold; padding: 4px 0 2px 0;"
+        )
+        ll.addWidget(svc_hdr)
+
+        self.svc_table = QTableWidget()
+        self.svc_table.setColumnCount(2)
+        self.svc_table.setHorizontalHeaderLabels(["Name", "Status"])
+        self.svc_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.svc_table.setAlternatingRowColors(True)
+        self.svc_table.verticalHeader().setDefaultSectionSize(28)
+        self.svc_table.setStyleSheet("alternate-background-color: #2a2a2a;")
+        self.svc_table.setFixedHeight(180)
+        ll.addWidget(self.svc_table)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("color: #3a3a3a; margin: 4px 0;")
+        ll.addWidget(sep)
+
+        act_hdr = QLabel("ACTIONS")
+        act_hdr.setStyleSheet(
+            "color: #6a6a6a; font-size: 10px; font-weight: bold; padding: 4px 0 2px 0;"
+        )
+        ll.addWidget(act_hdr)
+
+        actions = [
+            ("▶  Up",          self._up),
+            ("▶  Up --build",  self._up_build),
+            ("■  Down",        self._down),
+            ("⟳  Restart",     self._restart),
+            ("🔨  Build",      self._build),
+            ("⬇  Pull",        self._pull),
+            ("📋  Logs",       self._logs),
+        ]
+        self._action_btns = []
+        for label, func in actions:
+            btn = QPushButton(label)
+            btn.setStyleSheet(ACTION_BTN_STYLE)
+            btn.clicked.connect(func)
+            btn.setEnabled(False)   # disabled until a file is loaded
+            ll.addWidget(btn)
+            self._action_btns.append(btn)
+
+        ll.addStretch()
+        splitter.addWidget(left)
+
+        # Jobb: output panel
+        right = QWidget()
+        rl = QVBoxLayout(right)
+        rl.setContentsMargins(0, 0, 0, 0)
+        rl.setSpacing(2)
+
+        out_hdr = QLabel("OUTPUT")
+        out_hdr.setStyleSheet(
+            "color: #6a6a6a; font-size: 10px; font-weight: bold; padding: 4px 0;"
+        )
+        rl.addWidget(out_hdr)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setFont(QFont("Monospace", 10))
+        self.output.setStyleSheet(
+            "background: #0d0d0d; color: #c8c8c8;"
+            "border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px;"
+            "font-family: 'Courier New', monospace; font-size: 12px;"
+        )
+        rl.addWidget(self.output, 1)
+
+        # Stop gomb
+        stop_row = QHBoxLayout()
+        self.stop_btn = QPushButton("⏹  Stop")
+        self.stop_btn.setStyleSheet(DANGER_BTN_STYLE)
+        self.stop_btn.setEnabled(False)
+        self.stop_btn.clicked.connect(self._stop_thread)
+        stop_row.addStretch()
+        stop_row.addWidget(self.stop_btn)
+        rl.addLayout(stop_row)
+
+        splitter.addWidget(right)
+        splitter.setSizes([220, 680])
+        layout.addWidget(splitter, 1)
+
+    # ── File handling ──────────────────────────────────────────────────────
+
+    def _open_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Compose File", "",
+            "Compose files (docker-compose.yml docker-compose.yaml "
+            "compose.yml compose.yaml);;All files (*)"
+        )
+        if path:
+            self.compose_file = path
+            self.file_label.setText(path)
+            self.file_label.setStyleSheet(
+                "color: #4ec9b0; background: #1e1e1e; border: 1px solid #3a3a3a;"
+                "border-radius: 4px; padding: 4px 8px;"
+            )
+            for btn in self._action_btns:
+                btn.setEnabled(True)
+            self.refresh()
+
+    def _cwd(self):
+        """Return the directory of the currently loaded compose file."""
+        return os.path.dirname(self.compose_file) if self.compose_file else "."
+
+    # Standard compose filenames – auto-detected by all compose tools
+    _STANDARD_NAMES = {
+        "compose.yml", "compose.yaml",
+        "docker-compose.yml", "docker-compose.yaml",
+    }
+
+    def _base_cmd(self):
+        """
+        Return the compose command with an optional -f flag.
+
+        If the filename is a standard name (compose.yaml etc.), we omit -f –
+        the cwd setting is sufficient and avoids -f / --file compatibility
+        differences between docker compose / podman compose / podman-compose.
+        Non-standard filenames use -f basename.
+        """
+        fname = os.path.basename(self.compose_file)
+        if fname in self._STANDARD_NAMES:
+            return self.compose_cmd          # cwd is sufficient, no -f needed
+        return self.compose_cmd + ["-f", fname]
+
+    # ── Refresh (compose ps) ───────────────────────────────────────────────
+
+    def refresh(self):
+        if not self.compose_file:
+            return
+        try:
+            result = subprocess.run(
+                self._base_cmd() + ["ps", "--format", "json"],
+                cwd=self._cwd(),
+                capture_output=True, text=True, timeout=10,
+            )
+            self._parse_ps(result.stdout)
+        except Exception as e:
+            self.log_message.emit(f"Compose ps hiba: {e}")
+
+    def _parse_ps(self, raw: str):
+        """Parse the output of compose ps --format json."""
+        import json
+        self.svc_table.setRowCount(0)
+        try:
+            data = json.loads(raw) if raw.strip() else []
+            # Older compose versions return the name under a different key
+            for row, svc in enumerate(data):
+                name   = svc.get("Service") or svc.get("Name", "?")
+                status = svc.get("Status")  or svc.get("State", "?")
+                self.svc_table.insertRow(row)
+                self.svc_table.setItem(row, 0, QTableWidgetItem(name))
+                item = QTableWidgetItem(status)
+                color = "#4ec9b0" if "running" in status.lower() else "#f44747"
+                item.setForeground(QColor(color))
+                self.svc_table.setItem(row, 1, item)
+        except Exception:
+            pass   # not JSON – harmless, the table simply won't refresh
+
+    # ── Thread management ───────────────────────────────────────────────────
+
+    def _run(self, extra_args: list[str]):
+        if not self.compose_file:
+            self.log_message.emit("Load a compose file first.")
+            return
+        if self._thread and self._thread.isRunning():
+            self.log_message.emit("An operation is already running.")
+            return
+
+        cmd = self._base_cmd() + extra_args
+        self.output.append(f"❯ {' '.join(cmd)}\n")
+        self._thread = ComposeThread(cmd, self._cwd())
+        self._thread.output.connect(self._append_output)
+        self._thread.finished_ok.connect(self.refresh)
+        self._thread.finished.connect(lambda: self.stop_btn.setEnabled(False))
+        self._thread.start()
+        self.stop_btn.setEnabled(True)
+
+    def _stop_thread(self):
+        if self._thread and self._thread.isRunning():
+            self._thread.terminate()
+            self.output.append("\n⏹  Stopped.")
+            self.stop_btn.setEnabled(False)
+
+    def _append_output(self, line: str):
+        cleaned = ANSI_ESCAPE.sub("", line)
+        self.output.append(cleaned)
+        cursor = self.output.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self.output.setTextCursor(cursor)
+        self.output.ensureCursorVisible()
+        # Podman short-name hint
+        if "did not resolve to an alias" in line or "unqualified-search registries" in line:
+            hint = (
+                "\n💡  Tip: Podman requires a fully-qualified registry name in the compose file.\n"
+                "    e.g.: image: docker.io/portainer/portainer-ce:alpine\n"
+                "    Or add to /etc/containers/registries.conf:\n"
+                "      unqualified-search-registries = [\"docker.io\"]"
+            )
+            self.output.append(hint)
+
+        # podman-docker shim Yunix hiba
+        if "unsupported protocol: Yunix" in line or "TTRPC connection" in line:
+            hint = (
+                "\n💡  This error is caused by an incompatibility between the podman-docker\n"
+                "    shim and compose. Fix: switch to the Podman backend in the app,\n"
+                "    or install the real Docker Engine:\n"
+                "      sudo pacman -S docker docker-compose\n"
+                "      sudo systemctl enable --now docker"
+            )
+            self.output.append(hint)
+
+    # ── Actions ─────────────────────────────────────────────────────────────
+
+    def _up(self):          self._run(["up", "-d"])
+    def _up_build(self):    self._run(["up", "-d", "--build"])
+    def _down(self):        self._run(["down"])
+    def _restart(self):     self._run(["restart"])
+    def _build(self):       self._run(["build"])
+    def _pull(self):        self._run(["pull"])
+    def _logs(self):        self._run(["logs", "--tail=100"])
+
+
+# ---------------------------------------------------------------------------
+# Swarm view
+# ---------------------------------------------------------------------------
+
+class SwarmView(QWidget):
+    log_message = pyqtSignal(str)
+
+    def __init__(self, swarm_manager, logger):
+        super().__init__()
+        self.swarm = swarm_manager
+        self.logger = logger
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
+
+        warning = QLabel(
+            "⚠  Docker Swarm operations can be resource-intensive. Proceed with caution."
+        )
+        warning.setStyleSheet(
+            "color: #dcdcaa; background: #3a3000; border: 1px solid #5a5000;"
+            "border-radius: 4px; padding: 8px;"
+        )
+        layout.addWidget(warning)
+
+        for label, func in [
+            ("Initialize Swarm", self._init),
+            ("Deploy Service…",  self._deploy),
+            ("Scale Service…",   self._scale),
+            ("View Nodes",       self._nodes),
+            ("Leave Swarm",      self._leave),
+        ]:
+            btn = QPushButton(label)
+            btn.setStyleSheet(ACTION_BTN_STYLE)
+            btn.setFixedWidth(220)
+            btn.clicked.connect(func)
+            layout.addWidget(btn)
+
+        layout.addStretch()
+
+    def refresh(self):
+        pass  # Swarm state shown via log
+
+    def _init(self):
+        result = self.swarm.initialize_swarm()
+        self.log_message.emit(result)
+
+    def _deploy(self):
+        svc, ok1 = QInputDialog.getText(self, "Deploy Service", "Service name:")
+        if not ok1 or not svc:
+            return
+        img, ok2 = QInputDialog.getText(self, "Deploy Service", "Image name:")
+        if not ok2 or not img:
+            return
+        result = self.swarm.deploy_service(svc, img)
+        self.log_message.emit(result)
+
+    def _scale(self):
+        svc, ok1 = QInputDialog.getText(self, "Scale Service", "Service name:")
+        if not ok1 or not svc:
+            return
+        reps, ok2 = QInputDialog.getText(self, "Scale Service", "Number of replicas:")
+        if not ok2 or not reps:
+            return
+        result = self.swarm.scale_service(svc, reps)
+        self.log_message.emit(result)
+
+    def _nodes(self):
+        result = self.swarm.view_nodes()
+        self.log_message.emit(result)
+
+    def _leave(self):
+        reply = QMessageBox.question(
+            self, 'Leave Swarm', "Are you sure you want to leave the Swarm?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            result = self.swarm.leave_swarm()
+            self.log_message.emit(result)
+
+
+# ---------------------------------------------------------------------------
+# Main window
+# ---------------------------------------------------------------------------
 
 class DockerGui(QWidget):
     def __init__(self):
         super().__init__()
-        self.docker_client = docker.from_env() 
         self.logger = Logger()
+        self.current_backend = "Docker"       # "Docker" | "Podman"
+        self.podman_caps = None               # PodmanCapabilities | None
+        self._connect_docker()
         self.swarm = SwarmManager(self.logger)
+        self._setup_ui()
+        self._setup_refresh_timer()
 
-        self.imgd = ImageD()
-        self.server_thread = None
-        self.server_running = threading.Event() 
+    def _connect_docker(self):
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as e:
+            self.docker_client = None
+            print(f"Docker connection failed: {e}")
 
-        # Initialize window attributes
-        self.container_window = None
-        self.image_window = None
-        self.network_window = None
-        self.volume_window = None
-        self.monitor_windows = {}
-        self.monitor_thread = None
-        self.service_window = None
-        self.yaml_output = None
-
-        self.initUi()
-
-    def initUi(self):
+    def _setup_ui(self):
         self.setWindowTitle("Docker Manager")
-        self.setGeometry(100, 100, 800, 600)
+        self.setMinimumSize(900, 650)
+        self.setStyleSheet(DARK_THEME)
 
-        # Main layout now just holds the splitter
-        main_layout = QVBoxLayout()  # Main layout for the entire window
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-        # Create a splitter to hold the left and right sections
-        splitter = QSplitter(Qt.Horizontal)
+        # ── Top bar ────────────────────────────────────────────────────────
+        top_bar = QWidget()
+        top_bar.setFixedHeight(46)
+        top_bar.setStyleSheet("background: #141414; border-bottom: 1px solid #3a3a3a;")
+        top_row = QHBoxLayout(top_bar)
+        top_row.setContentsMargins(14, 0, 14, 0)
 
-        # Left layout for containers and images
-        left_widget = QWidget()  # Create a container widget for the left side
-        left_layout = QVBoxLayout(left_widget)  # Layout for the containers and images list
+        self.title_label = QLabel("🐋  Docker Manager")
+        self.title_label.setStyleSheet("color: #4fc3f7; font-size: 15px; font-weight: bold;")
+        top_row.addWidget(self.title_label)
 
-        # Containers section
-        left_layout.addWidget(QLabel("Containers"))
-        self.container_list = QListWidget()
-        self.container_list.setMinimumWidth(200)
-        left_layout.addWidget(self.container_list)
+        # Backend badge – shown when using Podman
+        self.backend_badge = QLabel()
+        self.backend_badge.setStyleSheet(
+            "color: #a277ff; background: #2a1a3a; border: 1px solid #a277ff;"
+            "border-radius: 3px; padding: 1px 7px; font-size: 11px; font-weight: bold;"
+        )
+        self.backend_badge.hide()
+        top_row.addWidget(self.backend_badge)
 
-        # Images section
-        left_layout.addWidget(QLabel("Images"))
-        self.image_list = QListWidget()
-        self.image_list.setMinimumWidth(200)
-        left_layout.addWidget(self.image_list)
+        top_row.addStretch()
 
-        left_widget.setLayout(left_layout)  # Set the layout for the left widget
+        top_row.addWidget(QLabel("Backend:"))
+        self.backend_combo = QComboBox()
+        self.backend_combo.addItem("Docker")
+        podman_item = "Podman" if is_podman_available() else "Podman (not installed)"
+        self.backend_combo.addItem(podman_item)
+        if not is_podman_available():
+            # Disable the Podman option if it is not installed
+            from PyQt5.QtGui import QStandardItemModel
+            model = self.backend_combo.model()
+            item = model.item(1)
+            item.setEnabled(False)
+            item.setToolTip("The 'podman' binary was not found in PATH.")
+        self.backend_combo.currentTextChanged.connect(self._switch_backend)
+        top_row.addWidget(self.backend_combo)
 
-        # Right layout for buttons, sections, and result area
-        right_widget = QWidget()  # Create a container widget for the right side
-        right_layout = QVBoxLayout(right_widget)
+        root.addWidget(top_bar)
 
-        # Create a QGroupBox to group the section buttons with padding
-        section_group = QGroupBox("Actions")
-        section_button_layout = QHBoxLayout()
+        # ── Nav bar ────────────────────────────────────────────────────────
+        nav_bar = QWidget()
+        nav_bar.setFixedHeight(40)
+        nav_bar.setStyleSheet("background: #1a1a1a; border-bottom: 1px solid #3a3a3a;")
+        nav_row = QHBoxLayout(nav_bar)
+        nav_row.setContentsMargins(8, 0, 8, 0)
+        nav_row.setSpacing(0)
 
-        # Create frames for each section, which will be collapsible
-        self.container_frame = self.create_frame()
-        self.volume_frame = self.create_frame()
-        self.network_frame = self.create_frame()
-        self.other_frame = self.create_frame()
+        self.nav_buttons = []
+        for i, label in enumerate(["Containers", "Images", "Volumes", "Networks", "Swarm", "Compose"]):
+            btn = QPushButton(label)
+            btn.setStyleSheet(NAV_BTN_STYLE)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda _, idx=i: self._switch_view(idx))
+            nav_row.addWidget(btn)
+            self.nav_buttons.append(btn)
 
-        # Add buttons to control the visibility of each section
-        self.container_button = self.create_button("Image Actions", self.container_frame)
-        self.volume_button = self.create_button("Volume Actions", self.volume_frame)
-        self.network_button = self.create_button("Network Actions", self.network_frame)
-        self.other_button = self.create_button("Other Actions", self.other_frame)
+        nav_row.addStretch()
+        root.addWidget(nav_bar)
 
-        # Add the buttons to the horizontal layout
-        section_button_layout.addWidget(self.container_button)
-        section_button_layout.addWidget(self.volume_button)
-        section_button_layout.addWidget(self.network_button)
-        section_button_layout.addWidget(self.other_button)
+        # ── Content (stacked) ──────────────────────────────────────────────
+        self.stack = QStackedWidget()
 
-        # Set the layout for the section group
-        section_group.setLayout(section_button_layout)
-        right_layout.addWidget(section_group)
+        self.containers_view = ContainersView(self.docker_client, self.logger)
+        self.images_view = ImagesView(self.docker_client, self.logger)
+        self.volumes_view = VolumesView(self.docker_client, self.logger)
+        self.networks_view = NetworksView(self.docker_client, self.logger)
+        self.swarm_view = SwarmView(self.swarm, self.logger)
+        self.compose_view = ComposeView(self.logger)
 
-        # Populate the frames with their respective buttons and layouts
-        self.populate_container_frame(self.container_frame)
-        self.populate_volume_frame(self.volume_frame)
-        self.populate_network_frame(self.network_frame)
-        self.populate_other_frame(self.other_frame)
+        for view in [
+            self.containers_view, self.images_view,
+            self.volumes_view, self.networks_view, self.swarm_view,
+            self.compose_view,
+        ]:
+            view.log_message.connect(self._append_log)
+            self.stack.addWidget(view)
 
-        # Add the frames to the right layout
-        right_layout.addWidget(self.container_frame)
-        right_layout.addWidget(self.volume_frame)
-        right_layout.addWidget(self.network_frame)
-        right_layout.addWidget(self.other_frame)
+        root.addWidget(self.stack, 1)
 
-        # Add QTextEdit for output messages
-        self.result_text = QTextEdit(self)
-        self.result_text.setReadOnly(True)
-        right_layout.addWidget(self.result_text)
+        # ── Log area ───────────────────────────────────────────────────────
+        log_frame = QWidget()
+        log_frame.setFixedHeight(130)
+        log_frame.setStyleSheet("background: #141414; border-top: 1px solid #3a3a3a;")
+        log_layout = QVBoxLayout(log_frame)
+        log_layout.setContentsMargins(8, 4, 8, 4)
+        log_layout.setSpacing(2)
 
-    # Add Help and Settings buttons to the bottom right
-        self.help_button = QPushButton("Help", self)
-        self.help_button.clicked.connect(self.show_help_dialog)
+        log_header = QLabel("LOG OUTPUT")
+        log_header.setStyleSheet(
+            "color: #6a6a6a; font-size: 10px; font-weight: bold;"
+        )
+        log_layout.addWidget(log_header)
 
-        self.settings_button = QPushButton("Image Detailer", self)  
-        self.settings_button.clicked.connect(self.image_details) 
+        self.log_output = QTextEdit()
+        self.log_output.setReadOnly(True)
+        self.log_output.setFont(QFont('Monospace', 9))
+        self.log_output.setStyleSheet(
+            "background: #0d0d0d; color: #9cdcfe; border: none;"
+            "font-family: 'Courier New', monospace;"
+        )
+        log_layout.addWidget(self.log_output)
+        root.addWidget(log_frame)
 
-        help_button_layout = QHBoxLayout()
-        help_button_layout.addStretch()  # Push buttons to the right
-        help_button_layout.addWidget(self.settings_button)
-        help_button_layout.addWidget(self.help_button)
-        right_layout.addLayout(help_button_layout)
+        # Start on Containers tab
+        self._switch_view(0)
 
-        right_widget.setLayout(right_layout)  # Set the layout for the right widget
+    def _switch_view(self, index):
+        # Swarm (index=4) is not available under Podman
+        swarm_btn = self.nav_buttons[4]
+        if self.current_backend == "Podman":
+            swarm_btn.setEnabled(False)
+            swarm_btn.setToolTip("Docker Swarm is not supported under Podman.")
+            if index == 4:
+                index = 0   # fall back to Containers tab
+        else:
+            swarm_btn.setEnabled(True)
+            swarm_btn.setToolTip("")
 
-        # Add left and right widgets to the splitter
-        splitter.addWidget(left_widget)
-        splitter.addWidget(right_widget)
+        for i, btn in enumerate(self.nav_buttons):
+            btn.setChecked(i == index)
+        self.stack.setCurrentIndex(index)
+        views = [
+            self.containers_view, self.images_view,
+            self.volumes_view, self.networks_view, self.swarm_view,
+            self.compose_view,
+        ]
+        views[index].refresh()
 
-        # Set initial sizes for splitter panels
-        splitter.setSizes([300, 500])  # Set initial widths (left: 300px, right: 500px)
+    def _switch_backend(self, backend_text: str):
+        # The combo text may also be "Podman (not installed)"
+        backend = "Podman" if backend_text.startswith("Podman") else "Docker"
 
-        # Add the splitter to the main layout
-        main_layout.addWidget(splitter)
+        if backend == self.current_backend:
+            return
 
-        self.setLayout(main_layout)
-
-        # Add hotkeys for existing buttons
-        self.add_shortcuts()
-
-        # Set up the automatic update of side panel lists using QTimer
-        self.setup_auto_refresh()
-
-         # Connect the context menu event
-        self.container_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.container_list.customContextMenuRequested.connect(self.show_context_menu)
-
-        # Populate the container and image lists initially
-        self.update_sidepanel_lists()
-
-
-    def image_details(self):
-        self.display_result("Open http://localhost:5000 for image details!")
-        
-        # Ensure the server is not already running
-        if self.server_thread is None or not self.server_thread.is_alive():
-            self.server_running.set()  # Signal the server to run
-            self.server_thread = threading.Thread(target=self.run_image_detailer)
-            self.server_thread.daemon = True  # Ensure thread doesn't block exit
-            self.server_thread.start()
-            self.logger.log_info("Server started.")
-
-    def run_image_detailer(self):
-        # Run the Flask app in a thread
-        self.imgd.run_image_detailer()
-
-    def stop_image_detailer(self):
-        # Check if the server is running and stop it
-        if self.server_running.is_set():
-            self.server_running.clear()
+        if backend == "Docker":
             try:
-                requests.post("http://localhost:5000/shutdown")
-                self.logger.log_info("Server shutdown request sent.")
-            except requests.exceptions.ConnectionError:
-                self.logger.log_error("Server is not running or already shut down.")
+                self.docker_client = docker.from_env()
+                self.current_backend = "Docker"
+                self.podman_caps = None
+                self.containers_view.podman_caps = None
+                self.containers_view.shell.binary = "docker"
+                self.compose_view.compose_cmd = ["docker", "compose"]
+                self._apply_backend_ui("Docker")
+                for view in [self.containers_view, self.images_view,
+                              self.volumes_view, self.networks_view]:
+                    view.docker_client = self.docker_client
+                self._append_log("Backend: Docker")
+                self._switch_view(self.stack.currentIndex())
             except Exception as e:
-                self.logger.log_error(f"Error shutting down server: {e}")
-                
-            # Join the thread to ensure clean shutdown
-            if self.server_thread is not None:
-                self.server_thread.join()
-                self.logger.log_info("Server thread joined successfully.")
+                self._append_log(f"Docker connection failed: {e}")
+
+        elif backend == "Podman":
+            try:
+                client, caps = get_podman_client()
+                self.docker_client = client
+                self.current_backend = "Podman"
+                self.podman_caps = caps
+                self._apply_backend_ui("Podman", caps)
+                for view in [self.containers_view, self.images_view,
+                              self.volumes_view, self.networks_view]:
+                    view.docker_client = self.docker_client
+                # Log known limitations
+                self._append_log(
+                    f"Backend: Podman  v{caps.server_version}  API {caps.api_version}"
+                )
+                for warn in caps.warnings():
+                    self._append_log(f"⚠  {warn}")
+                self.containers_view.podman_caps = caps
+                self.containers_view.shell.binary = "podman"
+                import shutil
+                if shutil.which("podman-compose"):
+                    self.compose_view.compose_cmd = ["podman-compose"]
+                else:
+                    self.compose_view.compose_cmd = ["podman", "compose"]
+                self._switch_view(self.stack.currentIndex())
+            except ConnectionError as e:
+                self._append_log(f"Podman connection failed:\n{e}")
+                # Revert the combo back to Docker
+                self.backend_combo.blockSignals(True)
+                self.backend_combo.setCurrentIndex(0)
+                self.backend_combo.blockSignals(False)
+            except Exception as e:
+                self._append_log(f"Podman hiba: {e}")
+                self.backend_combo.blockSignals(True)
+                self.backend_combo.setCurrentIndex(0)
+                self.backend_combo.blockSignals(False)
+
+    def _apply_backend_ui(self, backend: str, caps: "PodmanCapabilities | None" = None):
+        """Update the header badge and window title for the selected backend."""
+        if backend == "Podman":
+            ver = caps.server_version if caps else "?"
+            self.backend_badge.setText(f"Podman {ver}")
+            self.backend_badge.show()
+            self.title_label.setText("🦭  Docker Manager")
+            self.setWindowTitle("Docker Manager  [Podman]")
+        else:
+            self.backend_badge.hide()
+            self.title_label.setText("🐋  Docker Manager")
+            self.setWindowTitle("Docker Manager")
+
+    def _setup_refresh_timer(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._auto_refresh)
+        self.timer.start(5000)
+
+    def _auto_refresh(self):
+        # Only auto-refresh containers view (button bar)
+        if self.stack.currentIndex() == 0:
+            self.containers_view.refresh()
+
+    def _append_log(self, message):
+        self.log_output.append(message)
+        self.logger.log_info(message)
 
     def closeEvent(self, event):
-        """
-        Override the close event to stop the Flask server when the GUI is closed.
-        """
-        self.stop_image_detailer()
+        self.containers_view.shell.disconnect_shell()
+        self.containers_view._stop_resource_monitor()
+        # Stop any floating monitor windows so their threads are cleanly joined
+        for win, thread in list(self.containers_view.monitor_windows.values()):
+            try:
+                thread.update_graph.disconnect()
+            except Exception:
+                pass
+            thread.stop()
+            thread.wait(1500)
+            win.close()
+        self.containers_view.monitor_windows.clear()
         event.accept()
-
-
-    def setup_auto_refresh(self):
-        """Sets up a QTimer to automatically update the side panel lists."""
-        self.refresh_timer = QTimer(self)
-        self.refresh_timer.timeout.connect(self.update_sidepanel_lists)  # Connect the timer to the update function
-        self.refresh_timer.start(5000)  # Refresh every 5000 milliseconds (5 seconds)
-
-    def update_sidepanel_lists(self):
-        """Updates the container and image lists automatically."""
-        # Clear the existing items in both container and image lists
-        self.container_list.clear()
-        self.image_list.clear()
-
-        # Fetch the latest containers and images from Docker
-        containers = self.docker_client.containers.list(all=True)  # Get all containers
-        images = self.docker_client.images.list()  # Get all images
-
-        # Update the container list
-        for container in containers:
-            container_item = QListWidgetItem(f"Container: {container.name}")
-            if container.status == 'running':
-                # Highlight running containers in green with bold font
-                container_item.setBackground(Qt.green)
-                container_item.setFont(QFont('Arial', weight=QFont.Bold))
-                container_item.setForeground(QColor('black'))
-            self.container_list.addItem(container_item)
-
-        # Update the image list
-        for image in images:
-            # Use image ID if tags are empty
-            image_tags = ', '.join(image.tags) if image.tags else image.short_id
-            image_item = QListWidgetItem(f"Image: {image_tags}")
-            self.image_list.addItem(image_item)
-
-    def create_frame(self):
-        frame = QFrame()
-        frame.setFrameShape(QFrame.StyledPanel)
-        frame.setVisible(False)
-        return frame
-    
-
-    def show_context_menu(self, pos):
-        """Displays the context menu for container actions."""
-        item = self.container_list.itemAt(pos)
-        if not item:
-            return
-        
-        menu = QMenu(self)
-        start_action = QAction("Start", self)
-        stop_action = QAction("Stop", self)
-        pause_action = QAction("Pause", self)
-
-        start_action.triggered.connect(lambda: self.perform_action(item, 'start'))
-        stop_action.triggered.connect(lambda: self.perform_action(item, 'stop'))
-        pause_action.triggered.connect(lambda: self.perform_action(item, 'pause'))
-
-        menu.addAction(start_action)
-        menu.addAction(stop_action)
-        menu.addAction(pause_action)
-
-        menu.exec_(self.container_list.viewport().mapToGlobal(pos))
-
-    def perform_action(self, item, action):
-        """Performs the Docker action based on the selected item and action."""
-        container_name = item.text().replace("Container: ", "")
-        container = self.docker_client.containers.get(container_name)
-
-        if action == 'start':
-            if container.status != 'running':
-                container.start()
-        elif action == 'stop':
-            if container.status == 'running':
-                container.stop()
-        elif action == 'pause':
-            if container.status == 'running':
-                container.pause()
-
-    def create_button(self, text, associated_frame):
-        button = QPushButton(text, self)
-        button.setCheckable(True)
-        button.clicked.connect(lambda: self.toggle_frame(associated_frame, button))
-        button.setStyleSheet("""
-            QPushButton {
-                padding: 10px;
-                background-color: #3498db;
-                color: white;
-                border-radius: 5px;
-            }
-            QPushButton:checked {
-                background-color: #2980b9;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        return button
-
-    def toggle_frame(self, frame, button):
-        if frame.isVisible():
-            self.animate_frame(frame, False)
-            button.setChecked(False)
-        else:
-            self.animate_frame(frame, True)
-            button.setChecked(True)
-
-    def animate_frame(self, frame, expanding):
-        animation = QPropertyAnimation(frame, b"geometry")
-        start_geometry = frame.geometry()
-        if expanding:
-            end_geometry = QRect(start_geometry.x(), start_geometry.y(), start_geometry.width(), 200)
-        else:
-            end_geometry = QRect(start_geometry.x(), start_geometry.y(), start_geometry.width(), 0)
-
-        animation.setDuration(300)
-        animation.setStartValue(start_geometry)
-        animation.setEndValue(end_geometry)
-        animation.start()
-
-        frame.setVisible(True if expanding else False)
-
-
-    def add_shortcuts(self):
-        # Define and add hotkeys for existing buttons
-        QShortcut(QKeySequence("Ctrl+1"), self).activated.connect(lambda: self.container_button.click())
-        QShortcut(QKeySequence("Ctrl+2"), self).activated.connect(lambda: self.volume_button.click())
-        QShortcut(QKeySequence("Ctrl+3"), self).activated.connect(lambda: self.network_button.click())
-        QShortcut(QKeySequence("Ctrl+4"), self).activated.connect(lambda: self.other_button.click())
-
-    def show_help_dialog(self):
-        help_dialog = HelpDialog(self)
-        help_dialog.exec_()
-
-    def toggle_frame(self, frame, button):
-        frame.setVisible(not frame.isVisible())
-        button.setChecked(frame.isVisible())
-
-    def populate_container_frame(self, frame):
-        layout = QHBoxLayout()
-        layout.setSpacing(10)  # Add spacing between buttons
-
-        container_buttons = [
-            ("List Containers", self.list_containers),
-            ("Create Container", self.create_container_prompt),
-            ("List Images", self.list_images),
-            ("Pull Image", self.pull_image),
-        ]
-
-        for text, func in container_buttons:
-            button = self.create_styled_button(text, func)
-            layout.addWidget(button)
-
-        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
-        frame.setLayout(layout)
-
-    def populate_volume_frame(self, frame):
-        layout = QHBoxLayout()
-        layout.setSpacing(10)  # Add spacing between buttons
-
-        volume_buttons = [
-            ("List Volumes", self.list_volumes),
-            ("Create Volume", self.create_volume_prompt),
-            ("Prune Unused Volumes", self.prune_volumes),
-        ]
-
-        for text, func in volume_buttons:
-            button = self.create_styled_button(text, func)
-            layout.addWidget(button)
-
-        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
-        frame.setLayout(layout)
-
-    def populate_network_frame(self, frame):
-        layout = QHBoxLayout()
-        layout.setSpacing(10)  # Add spacing between buttons
-
-        network_buttons = [
-            ("List Networks", self.list_networks),
-            ("Create Network", self.create_network_prompt),
-        ]
-
-        for text, func in network_buttons:
-            button = self.create_styled_button(text, func)
-            layout.addWidget(button)
-
-        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
-        frame.setLayout(layout)
-
-    def populate_other_frame(self, frame):
-        layout = QHBoxLayout()
-        layout.setSpacing(10)  # Add spacing between buttons
-
-        other_buttons = [
-            ("Create Compose File", self.create_compose_form),
-            ("Docker Swarm", self.show_swarm_dialog),
-        ]
-
-        for text, func in other_buttons:
-            button = self.create_styled_button(text, func)
-            layout.addWidget(button)
-
-        layout.addStretch()  # Pushes the buttons to the left and leaves space at the right
-        frame.setLayout(layout)
-
-    def create_styled_button(self, text, func):
-        button = QPushButton(text, self)
-        button.clicked.connect(func)
-        button.setStyleSheet("""
-            QPushButton {
-                padding: 10px;
-                background-color: #2ecc71;
-                color: white;
-                border-radius: 5px;
-                font-size: 14px;
-            }
-            QPushButton:hover {
-                background-color: #27ae60;
-            }
-            QPushButton:pressed {
-                background-color: #1e8449;
-            }
-        """)
-        return button
-
-
-
-    def display_result(self, result):
-        self.result_text.append(result)
-
-    def list_containers(self):
-        try:
-            self.logger.log_info("Listing all containers.")
-            containers = self.docker_client.containers.list(all=True)
-            self.show_containers_table(containers)
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error listing containers: {e}")
-
-
-    def show_containers_table(self, containers):
-        if self.container_window:
-            self.container_window.close()
-
-        self.container_window = QWidget()
-        self.container_window.setWindowTitle("Containers")
-        self.container_window.setGeometry(100, 100, 1000, 600)  # Adjusted size for better fit
-
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)  # Add padding around the table
-
-        table = QTableWidget()
-        table.setRowCount(len(containers))
-        table.setColumnCount(6)  # Columns: ID, Name, Status, Manage, Inspect, Stats
-        table.setHorizontalHeaderLabels([
-            "ID", "Name", "Status", "Manage", "Inspect", "Stats"
-        ])
-
-        # Customize header
-        header = table.horizontalHeader()
-        header.setStyleSheet("""
-            QHeaderView::section {
-                background-color: #3498db;
-                color: white;
-                padding: 5px;
-                border: 1px solid #2980b9;
-            }
-        """)
-        header.setSectionResizeMode(QHeaderView.Stretch)  # Let columns stretch to fit the window
-        table.setAlternatingRowColors(True)
-        table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #bdc3c7;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-        """)
-        
-        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
-
-        # Populate the table with data and grouped action buttons
-        for row, container in enumerate(containers):
-            table.setItem(row, 0, QTableWidgetItem(container.id))
-            table.setItem(row, 1, QTableWidgetItem(container.name))
-            table.setItem(row, 2, QTableWidgetItem(container.status))
-
-            # Create "Manage" button with related actions
-            manage_button = QPushButton("Manage")
-            manage_menu = QMenu(manage_button)
-            
-            # Add actions to the "Manage" menu
-            manage_menu.addAction("Start", lambda c=container: self.start_container(c))
-            manage_menu.addAction("Stop", lambda c=container: self.stop_container(c))
-            manage_menu.addAction("Pause", lambda c=container: self.pause_container(c))
-            manage_menu.addAction("Unpause", lambda c=container: self.unpause_container(c))
-            
-            # Add "Remove" action and disable if the container is running
-            remove_action = QAction("Remove", self)
-            if container.status == 'running':
-                remove_action.setEnabled(False)  # Disable the remove action if the container is running
-            remove_action.triggered.connect(lambda _, c=container: self.remove_container(c))
-            manage_menu.addAction(remove_action)
-            
-            manage_button.setMenu(manage_menu)
-            table.setCellWidget(row, 3, manage_button)
-
-            # Create "Inspect" button with related actions
-            inspect_button = QPushButton("Inspect")
-            inspect_menu = QMenu(inspect_button)
-            inspect_menu.addAction("Logs", lambda c=container: self.open_log(c))
-            inspect_menu.addAction("Shell", lambda c=container: self.open_shell(c))
-            inspect_menu.addAction("Inspect", lambda c=container: self.inspect_container(c))
-            inspect_button.setMenu(inspect_menu)
-            table.setCellWidget(row, 4, inspect_button)
-
-            # Create "Stats" button with related actions
-            stats_button = QPushButton("Stats")
-            stats_menu = QMenu(stats_button)
-            stats_menu.addAction("Stats", lambda c=container: self.show_stats(c))
-            stats_menu.addAction("Monitor", lambda c=container: self.open_monitor(c))
-            stats_button.setMenu(stats_menu)
-            table.setCellWidget(row, 5, stats_button)
-
-        layout.addWidget(table)
-        self.container_window.setLayout(layout)
-        self.container_window.show()
-        
-    def list_images(self):
-        try:
-            self.logger.log_info("Listing all images.")
-            images = self.docker_client.images.list()
-            self.show_images_table(images)
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error listing images: {e}")
-
-    def show_images_table(self, images):
-        if self.image_window:
-            self.image_window.close()
-
-        self.image_window = QWidget()
-        self.image_window.setWindowTitle("Images")
-        self.image_window.setGeometry(100, 100, 1000, 600)  # Adjusted size for better fit
-
-        layout = QVBoxLayout()
-        table = QTableWidget()
-        table.setRowCount(len(images))
-        table.setColumnCount(7)  # Adjusted to 7 columns
-        table.setHorizontalHeaderLabels([
-            "ID", "Tags", "Remove", "Tag", "Push", "Run", "Stop"
-        ])  # Updated header labels
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        # Apply styling to the table
-        table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #bdc3c7;
-                font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-        """)
-        
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
-
-        for row, img in enumerate(images):
-            image_id = img.id
-            tags = img.tags if img.tags else []
-
-            table.setItem(row, 0, QTableWidgetItem(image_id))  # ID
-            table.setItem(row, 1, QTableWidgetItem(", ".join(tags)))  # Tags
-
-            # Create and style buttons
-            button_style = """
-                QPushButton {
-                    background-color: #3498db;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 5px 10px;
-                    min-width: 80px;
-                }
-                QPushButton:hover {
-                    background-color: #2980b9;
-                }
-                QPushButton:pressed {
-                    background-color: #1c598a;
-                }
-            """
-
-            remove_button = QPushButton("Remove")
-            remove_button.setStyleSheet(button_style)
-            remove_button.clicked.connect(lambda _, i=img: self.remove_image(i))
-            table.setCellWidget(row, 2, remove_button)  # Remove
-
-            tag_button = QPushButton("Tag")
-            tag_button.setStyleSheet(button_style)
-            tag_button.clicked.connect(lambda _, i=img: self.tag_image(i))
-            table.setCellWidget(row, 3, tag_button)  # Tag
-
-            push_button = QPushButton("Push")
-            push_button.setStyleSheet(button_style)
-            push_button.clicked.connect(lambda _, i=img: self.push_image(i))
-            table.setCellWidget(row, 4, push_button)  # Push
-
-            # Create the Run button
-            run_button = QPushButton("Run")
-            run_button.setStyleSheet(button_style)
-
-            # Create the dropdown menu
-            run_menu = QMenu()
-
-            # Add two actions (functions) to the menu
-            run_menu.addAction("Add parameters", lambda i=img: self.open_settings_dialog(i))
-            run_menu.addAction("Run", lambda i=img: self.run_image_noparams(i))
-
-            # Attach the menu to the button
-            run_button.setMenu(run_menu)
-
-            # Set the button in the table
-            table.setCellWidget(row, 5, run_button)
-
-            stop_button = QPushButton("Stop")
-            stop_button.setStyleSheet(button_style)
-            stop_button.clicked.connect(lambda _, i=img: self.stop_container_for_image(i))
-            table.setCellWidget(row, 6, stop_button)  # Stop
-
-        layout.addWidget(table)
-        self.image_window.setLayout(layout)
-        self.image_window.show()
-
-    def run_image_noparams(self, image):
-        try:
-            # Extract exposed ports from the image
-            exposed_ports = image.attrs.get('Config', {}).get('ExposedPorts', {})
-
-            # Create port mappings dynamically
-            port_bindings = {}
-            for port in exposed_ports.keys():
-                # Get the port number from the key, which looks like '80/tcp'
-                port_num = int(port.split('/')[0])  # Get the port number as integer
-                
-                # Create a binding for each exposed port
-                port_bindings[port] = ('0.0.0.0', port_num)  # Bind to all interfaces on the host
-
-            # Start a container from the image with the Docker socket binding
-            container = self.docker_client.containers.run(
-                image.id,  # Use the image ID to start the container
-                network_mode="bridge",  # Use the default bridge network
-                ports=port_bindings,  # Use dynamic port bindings
-                volumes={'/var/run/docker.sock': {'bind': '/var/run/docker.sock', 'mode': 'rw'}},  # Bind Docker socket
-                detach=True,  # Run the container in detached mode
-            )
-
-            self.logger.log_info(f"Container started from image '{image.id}'. Container ID: {container.id}")
-
-            # Optional: Open a shell in a terminal to the running container
-            self.open_shell(container)
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"API Error: {e}")
-        except Exception as e:
-            self.logger.log_error(f"An unexpected error occurred: {e}")
-
-
-    def open_settings_dialog(self, image):
-        dialog = QDialog()
-        dialog.setWindowTitle("Container Settings")
-
-        layout = QFormLayout()
-
-        # CPU and Memory fields
-        cpu_spinbox = QSpinBox()
-        cpu_spinbox.setRange(1, 16)  # Example range for CPU
-        layout.addRow(QLabel("CPUs:"), cpu_spinbox)
-
-        memory_spinbox = QSpinBox()
-        memory_spinbox.setRange(1, 16000)  # Memory in MB
-        layout.addRow(QLabel("Memory (MB):"), memory_spinbox)
-
-        # Ports, Volumes, Environment Variables, Command, and Restart Policy fields
-        ports_line_edit = QLineEdit()
-        layout.addRow(QLabel("Ports (e.g., 8080:80):"), ports_line_edit)
-
-        volumes_line_edit = QLineEdit()
-        layout.addRow(QLabel("Volumes (e.g., /host/path:/container/path):"), volumes_line_edit)
-
-        env_vars_line_edit = QLineEdit()
-        layout.addRow(QLabel("Environment Variables (e.g., KEY=VALUE):"), env_vars_line_edit)
-
-        command_line_edit = QLineEdit()
-        layout.addRow(QLabel("Command:"), command_line_edit)
-
-        restart_policy_combobox = QComboBox()
-        restart_policy_combobox.addItems(["no", "always", "unless-stopped", "on-failure"])
-        layout.addRow(QLabel("Restart Policy:"), restart_policy_combobox)
-
-        # OK Button to save settings and create the container
-        ok_button = QPushButton("OK")
-        ok_button.clicked.connect(lambda: self.handle_settings(dialog, image, cpu_spinbox, memory_spinbox, ports_line_edit, volumes_line_edit, env_vars_line_edit, command_line_edit, restart_policy_combobox))
-        layout.addWidget(ok_button)
-
-        dialog.setLayout(layout)
-        dialog.exec_()
-
-    def handle_settings(self, dialog, image, cpu_spinbox, memory_spinbox, ports_line_edit, volumes_line_edit, env_vars_line_edit, command_line_edit, restart_policy_combobox):
-        settings = {
-            'command': self.parse_command(command_line_edit.text()),
-            'ports': self.parse_ports(ports_line_edit.text()),
-            'volumes': self.parse_volumes(volumes_line_edit.text()),
-            'env_vars': self.parse_env_vars(env_vars_line_edit.text()),
-            'restart_policy': self.parse_restart_policy(restart_policy_combobox.currentText())
-        }
-
-        # Add CPU and memory limits if set
-        if cpu_spinbox.value() > 0:
-            settings['cpu_quota'] = cpu_spinbox.value() * 100000  # Docker CPU quota calculation
-            settings['cpu_period'] = 100000  # Default period
-        if memory_spinbox.value() > 0:
-            settings['mem_limit'] = f"{memory_spinbox.value()}m"
-
-        # Create a valid container name by sanitizing the image name
-        container_name = self.sanitize_container_name(f"{image.tags[0]}_container")
-
-        # Create container with settings
-        self.container_setup(container_name, image.id, flags=settings)
-
-        dialog.close()
-
-    def sanitize_container_name(self, name):
-        # Replace invalid characters with an underscore
-        sanitized_name = ''.join(c if c.isalnum() or c in ['_', '-', '.'] else '_' for c in name)
-        
-        # Ensure the name is not empty and does not start with an invalid character
-        if not sanitized_name or not sanitized_name[0].isalnum():
-            sanitized_name = 'container_' + sanitized_name
-        
-        return sanitized_name
-
-    # Parsing functions
-    def parse_ports(self, ports_text):
-        ports = {}
-        for port_mapping in ports_text.split(','):
-            try:
-                host_port, container_port = port_mapping.split(':')
-                ports[int(container_port.strip())] = int(host_port.strip())  # Corrected to container:host format
-            except ValueError:
-                self.logger.log_error(f"Invalid port mapping: '{port_mapping}'")
-        return ports
-
-    def parse_volumes(self, volumes_text):
-        volumes = {}
-        for volume_mapping in volumes_text.split(','):
-            try:
-                host_volume, container_volume = volume_mapping.split(':')
-                volumes[host_volume.strip()] = {'bind': container_volume.strip(), 'mode': 'rw'}
-            except ValueError:
-                self.logger.log_error(f"Invalid volume mapping: '{volume_mapping}'")
-        return volumes
-
-    def parse_env_vars(self, env_vars_text):
-        env_vars = {}
-        for env_var in env_vars_text.split(','):
-            try:
-                key, value = env_var.split('=')
-                env_vars[key.strip()] = value.strip()
-            except ValueError:
-                self.logger.log_error(f"Invalid environment variable: '{env_var}'")
-        return env_vars
-
-    def parse_restart_policy(self, restart_policy_text):
-        policy_dict = {'Name': restart_policy_text}
-        if restart_policy_text == 'on-failure':
-            policy_dict['MaximumRetryCount'] = 5  # Set default retry count
-        return policy_dict
-
-    def parse_command(self, command_text):
-        return command_text.split() if command_text else None
-
-    # Container setup function
-    def container_setup(self, container_name, image_name, flags=None):
-        try:
-            self.logger.log_info(f"Creating container with name: {container_name} and image: {image_name}")
-
-            # Prepare container arguments
-            run_args = {
-                'image': image_name,
-                'detach': True,
-                'name': container_name
-            }
-
-            # Add optional arguments based on user input
-            if flags:
-                if 'command' in flags and flags['command']:
-                    run_args['command'] = flags['command']
-                if 'ports' in flags and flags['ports']:
-                    run_args['ports'] = flags['ports']
-                if 'volumes' in flags and flags['volumes']:
-                    run_args['volumes'] = flags['volumes']
-                if 'env_vars' in flags and flags['env_vars']:
-                    run_args['environment'] = flags['env_vars']
-                if 'restart_policy' in flags and flags['restart_policy']:
-                    run_args['restart_policy'] = flags['restart_policy']
-                if 'cpu_quota' in flags and 'cpu_period' in flags:
-                    run_args['cpu_quota'] = flags['cpu_quota']
-                    run_args['cpu_period'] = flags['cpu_period']
-                if 'mem_limit' in flags:
-                    run_args['mem_limit'] = flags['mem_limit']
-
-            # Log the final run arguments for debugging
-            self.logger.log_info(f"Running container with args: {run_args}")
-
-            # Create and start the container
-            container = self.docker_client.containers.run(**run_args)
-            self.logger.log_info(f"Container '{container_name}' created and started successfully.")
-            return container
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error creating container: {e}")
-        except Exception as ex:
-            self.logger.log_error(f"Unexpected error: {ex}")
-
-
-    def stop_container_for_image(self, image):
-        try:
-            # Get the list of running containers
-            containers = self.docker_client.containers.list()
-            
-            # Find the container running the given image
-            container_to_stop = None
-            for container in containers:
-                if container.image.id == image.id:
-                    container_to_stop = container
-                    break
-            
-            if container_to_stop:
-                container_to_stop.stop()
-                self.logger.log_info(f"Container with ID '{container_to_stop.id}' stopped successfully.")
-            else:
-                self.logger.log_warning(f"No running container found for image '{image.id}'.")
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error stopping container for image '{image.id}': {e}")
-
-
-
-    def list_networks(self):
-        try:
-            self.logger.log_info("Listing all networks.")
-            networks = self.docker_client.networks.list()
-            self.show_networks_table(networks)
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error listing networks: {e}")
-
-    def show_networks_table(self, networks):
-        if self.network_window:
-            self.network_window.close()
-
-        self.network_window = QWidget()
-        self.network_window.setWindowTitle("Networks")
-        self.network_window.setGeometry(100, 100, 800, 600)  # Adjusted size for better fit
-
-        layout = QVBoxLayout()
-        table = QTableWidget()
-        table.setRowCount(len(networks))
-        table.setColumnCount(6)
-        table.setHorizontalHeaderLabels([
-            "Name", "ID", "Driver", "Scope", "Inspect", "Remove"
-        ])  # Updated header labels
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        # Apply styling to the table
-        table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #bdc3c7;
-                font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-        """)
-        
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
-
-        # Button styling
-        button_style = """
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 5px 10px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #1c598a;
-            }
-        """
-
-        for row, network in enumerate(networks):
-            table.setItem(row, 0, QTableWidgetItem(network.name))  # Name
-            table.setItem(row, 1, QTableWidgetItem(network.id))  # ID
-            table.setItem(row, 2, QTableWidgetItem(network.attrs.get('Driver', '')))  # Driver
-            table.setItem(row, 3, QTableWidgetItem(network.attrs.get('Scope', '')))  # Scope
-
-            # Create and style buttons
-            inspect_button = QPushButton("Inspect")
-            inspect_button.setStyleSheet(button_style)
-            inspect_button.clicked.connect(lambda _, n=network: self.inspect_network(n))
-            table.setCellWidget(row, 4, inspect_button)  # Inspect
-
-            remove_button = QPushButton("Remove")
-            remove_button.setStyleSheet(button_style)
-            remove_button.clicked.connect(lambda _, n=network: self.remove_network_prompt(n))
-            table.setCellWidget(row, 5, remove_button)  # Remove
-
-        layout.addWidget(table)
-        self.network_window.setLayout(layout)
-        self.network_window.show()
-
-    def list_volumes(self):
-        try:
-            self.logger.log_info("Listing all volumes.")
-            volumes = self.docker_client.volumes.list()
-            self.show_volumes_table(volumes)
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error listing volumes: {e}")
-
-    def show_volumes_table(self, volumes):
-        if self.volume_window:
-            self.volume_window.close()
-
-        self.volume_window = QWidget()
-        self.volume_window.setWindowTitle("Volumes")
-        self.volume_window.setGeometry(100, 100, 800, 600)  # Adjusted size for better fit
-
-        layout = QVBoxLayout()
-        table = QTableWidget()
-        table.setRowCount(len(volumes))
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels([
-            "Name", "ID", "Driver", "Remove"
-        ])  # Updated header labels
-        table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-        # Apply styling to the table
-        table.setStyleSheet("""
-            QTableWidget {
-                gridline-color: #bdc3c7;
-                font-size: 14px;
-            }
-            QTableWidget::item {
-                padding: 5px;
-            }
-        """)
-        
-        table.setAlternatingRowColors(True)
-        table.verticalHeader().setDefaultSectionSize(40)  # Adjust row height
-
-        # Button styling
-        button_style = """
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                padding: 5px 10px;
-                min-width: 80px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-            QPushButton:pressed {
-                background-color: #1c598a;
-            }
-        """
-
-        for row, volume in enumerate(volumes):
-            table.setItem(row, 0, QTableWidgetItem(volume.name))  # Name
-            table.setItem(row, 1, QTableWidgetItem(volume.id))  # ID
-            table.setItem(row, 2, QTableWidgetItem(volume.attrs.get('Driver', '')))  # Driver
-
-            # Create and style button
-            remove_button = QPushButton("Remove")
-            remove_button.setStyleSheet(button_style)
-            remove_button.clicked.connect(lambda _, v=volume: self.remove_volume_prompt(v))
-            table.setCellWidget(row, 3, remove_button)  # Remove
-
-        layout.addWidget(table)
-        self.volume_window.setLayout(layout)
-        self.volume_window.show()
-
-    def prune_volumes(self):
-        try:
-            self.logger.log_info("Pruning unused volumes.")
-            result = self.docker_client.volumes.prune()
-            self.logger.log_info(f"Pruned volumes: {result}")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error pruning volumes: {e}")
-
-
-    def create_container_prompt(self):
-        try:
-            self.logger.log_info("Prompting user to create a new container.")
-
-            # Create the dialog box for multiple inputs
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Create Container")
-
-            layout = QVBoxLayout(dialog)
-
-            # Container Name Input
-            container_name_label = QLabel("Container Name:")
-            container_name_input = QLineEdit(dialog)
-            layout.addWidget(container_name_label)
-            layout.addWidget(container_name_input)
-
-            # Dockerfile Path Input
-            dockerfile_label = QLabel("Dockerfile Path:")
-            dockerfile_input = QLineEdit(dialog)
-            dockerfile_browse_btn = QPushButton("Browse", dialog)
-            dockerfile_browse_btn.clicked.connect(lambda: self.browse_dockerfile(dockerfile_input))
-
-            dockerfile_layout = QHBoxLayout()
-            dockerfile_layout.addWidget(dockerfile_input)
-            dockerfile_layout.addWidget(dockerfile_browse_btn)
-
-            layout.addWidget(dockerfile_label)
-            layout.addLayout(dockerfile_layout)
-
-            # Flags Input (Optional)
-            flags_label = QLabel("Additional Flags (optional):")
-            flags_input = QLineEdit(dialog)
-            layout.addWidget(flags_label)
-            layout.addWidget(flags_input)
-
-            # OK and Cancel buttons
-            button_layout = QHBoxLayout()
-            ok_button = QPushButton("Create", dialog)
-            cancel_button = QPushButton("Cancel", dialog)
-
-            button_layout.addWidget(ok_button)
-            button_layout.addWidget(cancel_button)
-
-            layout.addLayout(button_layout)
-
-            # Handle OK and Cancel clicks
-            ok_button.clicked.connect(dialog.accept)
-            cancel_button.clicked.connect(dialog.reject)
-
-            # Show dialog and check result
-            if dialog.exec_() == QDialog.Accepted:
-                container_name = container_name_input.text()
-                dockerfile_path = dockerfile_input.text()
-                flags = flags_input.text()
-
-                # Ensure container name and dockerfile path are provided
-                if container_name and dockerfile_path:
-                    self.create_container_from_dockerfile(container_name, dockerfile_path, flags)
-                else:
-                    self.logger.log_error("Container name and Dockerfile path are required to create a container.")
-
-        except Exception as e:
-            self.logger.log_error(f"Error creating container: {e}")
-
-    def browse_dockerfile(self, dockerfile_input):
-        # Open file dialog to select Dockerfile path
-        dockerfile_path, _ = QFileDialog.getOpenFileName(self, "Select Dockerfile", "", "Dockerfile (*.Dockerfile);;All Files (*)")
-        if dockerfile_path:
-            dockerfile_input.setText(dockerfile_path)
-
-    def create_container_from_dockerfile(self, container_name, dockerfile_path, flags=None):
-        try:
-            self.logger.log_info(f"Building image from Dockerfile at: {dockerfile_path}")
-
-            # Extract directory and Dockerfile filename
-            dockerfile_dir = os.path.dirname(dockerfile_path)
-            dockerfile_name = os.path.basename(dockerfile_path)
-
-            # Build the image from Dockerfile
-            try:
-                image, build_logs = self.docker_client.images.build(
-                    path=dockerfile_dir, dockerfile=dockerfile_name, tag=container_name
-                )
-                for log in build_logs:
-                    self.logger.log_info(log.get("stream", "").strip())  # Log the build output
-                self.logger.log_info(f"Image '{container_name}' built successfully from Dockerfile.")
-            except docker.errors.BuildError as e:
-                self.logger.log_error(f"Failed to build image from Dockerfile: {e}")
-                return
-
-            # Prepare container arguments
-            run_args = {'detach': True, 'name': container_name}
-
-            if flags:
-                # Process flags and add to the arguments as needed
-                self.logger.log_info(f"Running container with flags: {flags}")
-                # Example: split the flags string by spaces
-                flag_list = flags.split()
-                run_args.update({'command': flag_list})
-
-            # Run the container from the built image
-            self.docker_client.containers.run(container_name, **run_args)
-            self.logger.log_info(f"Container '{container_name}' created successfully.")
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error creating container: {e}")
-
-
-    def create_container(self, container_name, image_name, dockerfile_path=None, flags=None):
-        try:
-            self.logger.log_info(f"Creating container with name: {container_name} and image: {image_name}")
-
-            # If a Dockerfile is provided, build the image first
-            if dockerfile_path:
-                self.logger.log_info(f"Building image from Dockerfile at: {dockerfile_path}")
-
-                # Use Docker's SDK to build the image from the Dockerfile
-                try:
-                    image, self.logger = self.docker_client.images.build(path=dockerfile_path, tag=image_name)
-                    for log in self.logger:
-                        self.logger.log_info(log.get("stream", "").strip())  # Log the build output
-                    self.logger.log_info(f"Image '{image_name}' built successfully from Dockerfile.")
-                except docker.errors.BuildError as e:
-                    self.logger.log_error(f"Failed to build image from Dockerfile: {e}")
-                    return
-
-            # Prepare container arguments
-            run_args = {'detach': True, 'name': container_name}
-
-            if flags:
-                # Process flags and add to the arguments as needed
-                self.logger.log_info(f"Running container with flags: {flags}")
-                # Example: split the flags string by spaces
-                flag_list = flags.split()
-                run_args.update({'command': flag_list})
-
-            self.logger.log_info(f"Container '{container_name}' created successfully.")
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error creating container: {e}")
-
-
-    def deploy_compose_prompt(self):
-        try:
-            self.logger.log_info("Prompting user to deploy a Docker Compose file.")
-            file_path, _ = QFileDialog.getOpenFileName(self, "Open Docker Compose File", "", "YAML Files (*.yml *.yaml)")
-            if file_path:
-                self.deploy_compose(file_path)
-        except Exception as e:
-            self.logger.log_error(f"Error deploying compose file: {e}")
-
-    def create_network_prompt(self):
-        try:
-            self.logger.log_info("Prompting user to create a new network.")
-            network_name, ok = QInputDialog.getText(self, "Create Network", "Network name:")
-            if ok and network_name:
-                self.create_network(network_name)
-        except Exception as e:
-            self.logger.log_error(f"Error creating network: {e}")
-
-    def create_network(self, network_name):
-        try:
-            self.logger.log_info(f"Creating network with name: {network_name}")
-            self.docker_client.networks.create(name=network_name, driver="bridge")
-            self.logger.log_info(f"Network '{network_name}' created successfully.")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error creating network: {e}")
-
-    def create_volume_prompt(self):
-        try:
-            self.logger.log_info("Prompting user to create a new volume.")
-            volume_name, ok = QInputDialog.getText(self, "Create Volume", "Volume name:")
-            if ok and volume_name:
-                self.create_volume(volume_name)
-        except Exception as e:
-            self.logger.log_error(f"Error creating volume: {e}")
-
-    def create_volume(self, volume_name):
-        try:
-            self.logger.log_info(f"Creating volume with name: {volume_name}")
-            self.docker_client.volumes.create(name=volume_name)
-            self.logger.log_info(f"Volume '{volume_name}' created successfully.")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error creating volume: {e}")
-
-
-    def start_container(self, container):
-        try:
-            container.start()
-            self.logger.log_info(f"Container '{container.id}' started.")
-            self.display_result(f"Container '{container.id}' started.")
-            self.list_containers() 
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error starting container: {e}")
-
-    def stop_container(self, container):
-        try:
-            container.stop()
-            self.logger.log_info(f"Container '{container.id}' stopped.")
-            self.display_result(f"Container '{container.id}' stopped.")
-            self.list_containers() 
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error stopping container: {e}")
-
-    def pause_container(self, container):
-        try:
-            # Check if the container is already paused or not running
-            if container.status != "running":
-                self.logger.log_info(f"Container '{container.id}' is not running, cannot pause.")
-                self.display_result(f"Container '{container.id}' is not running, cannot pause.")
-                return
-
-            container.pause()  # Attempt to pause the container
-            self.logger.log_info(f"Container '{container.id}' paused.")
-            self.display_result(f"Container '{container.id}' paused.")
-            self.list_containers()
-
-        except docker.errors.APIError as e:
-            # Log the full details of the error
-            self.logger.log_error(f"Error pausing container: {e.explanation}")
-            self.display_result(f"Error pausing container: {e.explanation}")
-
-        except Exception as e:
-            # Catch any other unforeseen errors
-            self.logger.log_error(f"Unexpected error: {e}")
-            self.display_result(f"Unexpected error: {e}")
-
-
-    def unpause_container(self, container):
-        try:
-            # Check if the container is paused before unpausing
-            if container.status != 'paused':
-                self.logger.log_info(f"Container '{container.id}' is not paused, cannot unpause.")
-                self.display_result(f"Container '{container.id}' is not paused, cannot unpause.")
-                return
-
-            container.unpause()
-            self.logger.log_info(f"Container '{container.id}' unpaused.")
-            self.display_result(f"Container '{container.id}' unpaused.")
-            self.list_containers()
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error unpausing container: {e}")
-
-
-    def remove_container(self, container):
-        try:
-            self.logger.log_info(f"Removing container: {container.id}")
-            container.remove(force=True)
-            self.logger.log_info(f"Container '{container.name}' removed successfully.")
-            self.display_result(f"Container '{container.name}' removed successfully.")
-            self.list_containers() 
-            self.update_sidepanel_lists()
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error removing container: {e}")
-
-
-
-    def open_log(self, container):
-        try:
-            # Fetch container logs, stream if needed
-            log = container.logs(stream=False).decode('utf-8')
-
-            # Display the fetched logs in the UI
-            if log:
-                self.display_result(log)
-            else:
-                self.logger.log_info(f"No logs available for container '{container.name}'.")
-
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"APIError fetching logs for container '{container.name}': {e}")
-        except Exception as e:
-            self.logger.log_error(f"Unexpected error fetching logs for container '{container.name}': {e}")
-
-
-    def open_shell(self, container):
-        try:
-            self.logger.log_info(f"Opening shell for container with ID: {container.id}")
-            command = f"docker exec -it {container.id} /bin/bash"
-            open_terminal_with_command(command)
-
-        except Exception as e:
-            self.logger.log_error(f"Error opening shell for container: {e}")
-
-    def remove_image(self, image):
-        try:
-            self.logger.log_info(f"Removing image with ID: {image.id}")
-            self.display_result(f"Removing image with ID: {image.id}")
-            self.docker_client.images.remove(image.id, force=True)
-            self.logger.log_info(f"Image '{image.id}' removed successfully.")
-            self.display_result(f"Image '{image.id}' removed successfully.")
-            self.list_images()
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error removing image: {e}")
-
-    def tag_image(self, image):
-        try:
-            self.logger.log_info(f"Prompting user to tag image with ID: {image.id}")
-            tag, ok = QInputDialog.getText(self, "Tag Image", "New tag:")
-            if ok and tag:
-                self.logger.log_info(f"Tagging image with ID: {image.id} with tag: {tag}")
-                self.display_result(f"Tagging image with ID: {image.id} with tag: {tag}")
-                image.tag(tag)
-                self.logger.log_info(f"Image '{image.id}' tagged with '{tag}' successfully.")
-                self.display_result(f"Image '{image.id}' tagged with '{tag}' successfully.")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error tagging image: {e}")
-
-    def push_image(self, image):
-        try:
-            self.logger.log_info(f"Prompting user to push image with ID: {image.id}")
-            self.display_result(f"Prompting user to push image with ID: {image.id}")
-            repository, ok = QInputDialog.getText(self, "Push Image", "Repository:")
-            if ok and repository:
-                self.logger.log_info(f"Pushing image with ID: {image.id} to repository: {repository}")
-                self.display_result(f"Pushing image with ID: {image.id} to repository: {repository}")
-                self.docker_client.images.push(repository)
-                self.logger.log_info(f"Image '{image.id}' pushed to repository '{repository}' successfully.")
-                self.display_result(f"Image '{image.id}' pushed to repository '{repository}' successfully.")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error pushing image: {e}")
-
-    def pull_image(self):
-        try:
-            # Check internet connection
-            try:
-                # Attempt to connect to Google's DNS server
-                socket.create_connection(("8.8.8.8", 53), timeout=5)
-            except OSError:
-                self.display_result("No internet connection available.")
-                self.logger.log_error("No internet connection available.")
-                return
-
-            # Prompt user for repository name
-            repository, ok = QInputDialog.getText(self, "Pull Image", "Enter image name (e.g., 'ubuntu' or 'ubuntu:latest'):")
-            
-            if not ok or not repository:
-                self.display_result("No repository name provided.")
-                self.logger.log_error("No repository name provided.")
-                return
-
-            # Create and show the progress dialog
-            progress_dialog = QProgressDialog("Pulling image...", "Cancel", 0, 100, self)
-            progress_dialog.setWindowTitle("Pulling Image")
-            progress_dialog.setWindowModality(Qt.WindowModal)
-            progress_dialog.setMinimumDuration(0)
-            
-            # Thread to handle Docker image pulling
-            self.pull_thread = PullImageThread(self.docker_client, repository)
-            self.pull_thread.progress.connect(lambda message: self.update_progress(message, progress_dialog))
-            self.pull_thread.finished.connect(progress_dialog.close)
-            self.pull_thread.start()
-
-        except Exception as e:
-            self.display_result(f"An error occurred: {e}")
-            self.logger.log_error(f"An error occurred: {e}")
-
-    def update_progress(self, message, progress_dialog):
-        if "status" in message:
-            # Update progress dialog with status message
-            progress_dialog.setLabelText(f"Status: {message}")
-        if "complete" in message.lower():
-            progress_dialog.setValue(100)
-            self.display_result("Done!")
-        elif "starting" in message.lower():
-            progress_dialog.setValue(0)
-            self.display_result(f"Pulling ...")
-        # Allow the progress dialog to be canceled
-        if progress_dialog.wasCanceled():
-            self.pull_thread.terminate()
-
-
-
-    def inspect_container(self, container):
-        try:
-            self.logger.log_info(f"Inspecting container with ID: {container.id}")
-            info = container.attrs
-            self.display_result(f"Inspecting container {container.id}:\n{info}")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error inspecting container: {e}")
-
-    def show_stats(self, container):
-        try:
-            self.logger.log_info(f"Showing stats for container with ID: {container.id}")
-            stats = container.stats(stream=False)
-            self.display_result(f"Stats for container {container.id}:\n{stats}")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error showing stats for container: {e}")
-
-    def open_monitor(self, container):
-        try:
-            container_id = container.id
-
-            # Check if the container is running
-            if container.status != 'running':
-                self.logger.log_error(f"Cannot open resource monitor: Container {container_id} is not running.")
-                self.display_result(f"Cannot open resource monitor: Container {container_id} is not running.")
-                return
-
-            self.logger.log_info(f"Opening resource monitor for container: {container_id}")
-
-            if container_id not in self.monitor_windows or not self.monitor_windows[container_id]:
-                monitor_window = QWidget()
-                monitor_window.setWindowTitle(f"Resource Monitor for {container.name}")
-                monitor_window.setGeometry(100, 100, 800, 600)
-
-                layout = QVBoxLayout()
-                resource_graph = ResourceGraphWidget(container.name)
-                layout.addWidget(resource_graph)
-
-                monitor_thread = ResourceMonitorThread(container)
-                monitor_thread.update_graph.connect(resource_graph.update_graph)
-                monitor_thread.start()
-
-                monitor_window.setLayout(layout)
-                monitor_window.show()
-
-                # Save the window and the thread in the dictionary
-                self.monitor_windows[container_id] = (monitor_window, monitor_thread)
-            else:
-                # If the window already exists, bring it to the front
-                self.monitor_windows[container_id][0].show()
-        except Exception as e:
-            self.logger.log_error(f"Error opening resource monitor: {e}")
-
-
-
-    def inspect_network(self, network):
-        try:
-            self.logger.log_info(f"Inspecting network with ID: {network.id}")
-            info = network.attrs
-            self.display_result(f"Inspecting network {network.id}:\n{info}")
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error inspecting network: {e}")
-
-    def remove_network_prompt(self, network):
-        try:
-            self.logger.log_info(f"Prompting user to remove network with ID: {network.id}")
-            reply = QMessageBox.question(self, 'Remove Network',
-                                         f"Are you sure you want to remove network '{network.name}'?",
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                self.remove_network(network)
-        except Exception as e:
-            self.logger.log_error(f"Error prompting network removal: {e}")
-
-    def remove_network(self, network):
-        try:
-            self.logger.log_info(f"Removing network with ID: {network.id}")
-            network.remove()
-            self.logger.log_info(f"Network '{network.id}' removed successfully.")
-            self.list_networks()
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error removing network: {e}")
-
-    def remove_volume_prompt(self, volume):
-        try:
-            self.logger.log_info(f"Prompting user to remove volume with ID: {volume.id}")
-            reply = QMessageBox.question(self, 'Remove Volume',
-                                         f"Are you sure you want to remove volume '{volume.name}'?",
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-            if reply == QMessageBox.Yes:
-                self.remove_volume(volume)
-        except Exception as e:
-            self.logger.log_error(f"Error prompting volume removal: {e}")
-
-    def remove_volume(self, volume):
-        try:
-            self.logger.log_info(f"Removing volume with ID: {volume.id}")
-            self.docker_client.volumes.get(volume.id).remove()
-            self.logger.log_info(f"Volume '{volume.id}' removed successfully.")
-            self.list_volumes()
-        except docker.errors.APIError as e:
-            self.logger.log_error(f"Error removing volume: {e}")
-
-
-    def manage_docker_compose_services(self):
-        services = self.list_docker_compose_services()
-
-        if not self.service_window:
-            self.service_window = QWidget()
-            self.service_window.setWindowTitle("Docker Compose Services")
-            self.service_window.setGeometry(100, 100, 1500, 600)
-
-            # Create layout and table
-            layout = QVBoxLayout()
-            layout.setContentsMargins(10, 10, 10, 10)  # Set margin to ensure no clipping
-            layout.setSpacing(5)  # Reduce spacing if it's too wide
-            
-            table = QTableWidget()
-            table.setRowCount(len(services))
-            table.setColumnCount(5)
-            table.setHorizontalHeaderLabels([
-                "Service Name", "Status", "Start", "Stop", "View self.logger"
-            ])
-            table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-            for row, service in enumerate(services):
-                name = service['name']
-                status = service['status']
-
-                table.setItem(row, 0, QTableWidgetItem(name))
-                table.setItem(row, 1, QTableWidgetItem(status))
-
-                # Start Button
-                start_button = QPushButton("Start")
-                start_button.clicked.connect(lambda _, s=name: self.start_service(s))
-                table.setCellWidget(row, 2, start_button)
-
-                # Stop Button
-                stop_button = QPushButton("Stop")
-                stop_button.clicked.connect(lambda _, s=name: self.stop_service(s))
-                table.setCellWidget(row, 3, stop_button)
-
-                # View self.logger Button
-                view_self.logger_button = QPushButton("View self.logger")
-                view_self.logger_button.clicked.connect(lambda _, s=name: self.view_service_self.logger(s))
-                table.setCellWidget(row, 4, view_self.logger_button)
-
-            # Add table to layout first
-            layout.addWidget(table)
-
-            # Add QTextEdit for output messages at the bottom
-            self.result_text = QTextEdit()
-            self.result_text.setReadOnly(True)
-            layout.addWidget(self.result_text)
-
-            # Set the layout to the window
-            self.service_window.setLayout(layout)
-        else:
-            self.service_window.show()
-
-
-    def create_compose_form(self):
-        """
-        Create a detailed form for generating Docker Compose YAML with every possible setting.
-        """
-        self.compose_window = QWidget()
-        self.compose_window.setWindowTitle("Create Docker Compose YAML")
-        self.compose_window.setGeometry(100, 100, 800, 600)
-
-        layout = QVBoxLayout()
-
-        # Service Name
-        self.service_name_input = QLineEdit()
-        layout.addWidget(QLabel("Service Name:"))
-        layout.addWidget(self.service_name_input)
-
-        # Image Name
-        self.image_name_input = QLineEdit()
-        layout.addWidget(QLabel("Image Name:"))
-        layout.addWidget(self.image_name_input)
-
-        # Ports
-        self.ports_input = QLineEdit()
-        layout.addWidget(QLabel("Ports (e.g., 80:80, 6379:6379):"))
-        layout.addWidget(self.ports_input)
-
-        # Environment Variables
-        self.env_input = QLineEdit()
-        layout.addWidget(QLabel("Environment Variables (e.g., KEY=VALUE,KEY2=VALUE2):"))
-        layout.addWidget(self.env_input)
-
-        # Volumes
-        self.volumes_input = QLineEdit()
-        layout.addWidget(QLabel("Volumes (e.g., ./host_path:/container_path):"))
-        layout.addWidget(self.volumes_input)
-
-        # Networks
-        self.network_input = QLineEdit()
-        layout.addWidget(QLabel("Networks (optional):"))
-        layout.addWidget(self.network_input)
-
-        # Command
-        self.command_input = QLineEdit()
-        layout.addWidget(QLabel("Command (optional):"))
-        layout.addWidget(self.command_input)
-
-        # Restart Policy
-        self.restart_policy_input = QLineEdit()
-        layout.addWidget(QLabel("Restart Policy (e.g., always, on-failure):"))
-        layout.addWidget(self.restart_policy_input)
-
-        # Replicas input
-        self.replicas_input = QLineEdit()
-        layout.addWidget(QLabel("Replicas (e.g., 1, 3):"))
-        layout.addWidget(self.replicas_input)
-
-        # YAML File Location input (optional)
-        self.yaml_location_input = QLineEdit()
-        layout.addWidget(QLabel("YAML File Location (optional):"))
-        layout.addWidget(self.yaml_location_input)
-
-        # Button to generate YAML
-        generate_button = QPushButton("Generate YAML")
-        generate_button.clicked.connect(self.generate_full_docker_compose_yaml)
-        layout.addWidget(generate_button)
-
-        # Output area for YAML preview
-        self.yaml_output = QTextEdit()  # Initialize QTextEdit
-        self.yaml_output.setReadOnly(True)
-        layout.addWidget(QLabel("Generated YAML:"))
-        layout.addWidget(self.yaml_output)
-
-        # Button to deploy the generated YAML
-        deploy_button = QPushButton("Deploy Generated YAML")
-        deploy_button.clicked.connect(lambda: self.save_and_deploy_yaml())
-        layout.addWidget(deploy_button)
-
-        # Button to import and deploy an existing YAML
-        import_button = QPushButton("Import and Deploy YAML")
-        import_button.clicked.connect(self.import_and_deploy_yaml)
-        layout.addWidget(import_button)
-
-        self.compose_window.setLayout(layout)
-        self.compose_window.show()
-
-
-    def save_and_deploy_yaml(self):
-        """
-        Saves the generated YAML to a file and deploys it using Docker Compose.
-        """
-        # Open file dialog to save the YAML
-        file_path, _ = QFileDialog.getSaveFileName(self.compose_window, "Save Compose File", "", "YAML Files (*.yaml)")
-
-        if file_path:
-            try:
-                # Save the generated YAML to the selected file
-                with open(file_path, 'w') as yaml_file:
-                    yaml_file.write(self.generated_yaml)
-
-                # Deploy the saved Docker Compose file
-                self.deploy_compose(file_path)
-            except Exception as e:
-                self.yaml_output.setPlainText(f"Error saving or deploying Docker Compose file: {str(e)}")
-
-
-    def import_and_deploy_yaml(self):
-        """
-        Opens a file dialog to select a YAML file and deploys it using Docker Compose.
-        """
-        # Open file dialog to select a YAML file
-        file_path, _ = QFileDialog.getOpenFileName(self.compose_window, "Import Compose File", "", "YAML Files (*.yaml)")
-
-        if file_path:
-            try:
-                # Deploy the selected YAML file
-                self.deploy_compose(file_path)
-            except Exception as e:
-                self.yaml_output.setPlainText(f"Error importing or deploying Docker Compose file: {str(e)}")
-
-
-    def deploy_compose(self, file_path):
-        """
-        Deploys the provided Docker Compose YAML file.
-        """
-        try:
-            self.logger.log_info(f"Deploying Docker Compose file: {file_path}")
-            result = subprocess.run(["docker-compose", "-f", file_path, "up", "-d"], capture_output=True, text=True)
-            if result.returncode == 0:
-                self.logger.log_info(f"Successfully deployed Docker Compose file: {file_path}")
-            else:
-                self.logger.log_error(f"Failed to deploy Docker Compose file: {result.stderr}")
-        except subprocess.CalledProcessError as e:
-            self.logger.log_error(f"Error deploying Docker Compose file: {e}")
-
-
-    def generate_full_docker_compose_yaml(self):
-            """
-            Generates a full Docker Compose YAML with all settings from the form and displays it.
-            """
-            # Collect inputs
-            service_name = self.service_name_input.text()
-            image_name = self.image_name_input.text()
-            ports = self.ports_input.text().split(',') if self.ports_input.text() else []
-            env_vars = self.env_input.text().split(',') if self.env_input.text() else []
-            volumes = self.volumes_input.text().split(',') if self.volumes_input.text() else []
-            networks = self.network_input.text() if self.network_input.text() else None
-            command = self.command_input.text() if self.command_input.text() else None
-            restart_policy = self.restart_policy_input.text() if self.restart_policy_input.text() else None
-            replicas = self.replicas_input.text() if self.replicas_input.text() else None
-
-            if not service_name or not image_name:
-                self.yaml_output.setPlainText("Please provide both service name and image name.")
-                return
-
-            # Construct the compose dictionary
-            service_config = {
-                'image': image_name,
-                'ports': ports,
-                'environment': env_vars,
-                'volumes': volumes
-            }
-
-            # Add optional fields
-            if networks:
-                service_config['networks'] = [networks]
-            if command:
-                service_config['command'] = command
-            if restart_policy or replicas:
-                service_config['deploy'] = {}
-                if restart_policy:
-                    service_config['deploy']['restart_policy'] = {'condition': restart_policy}
-                if replicas:
-                    service_config['deploy']['replicas'] = int(replicas)
-
-            # Compose file structure
-            compose_dict = {
-                'version': '3',
-                'services': {
-                    service_name: service_config
-                }
-            }
-
-            # Convert the dictionary to YAML format
-            yaml_str = yaml.dump(compose_dict, default_flow_style=False)
-            self.yaml_output.setPlainText(yaml_str)
-
-            # Store the YAML for deployment
-            self.generated_yaml = yaml_str
-
-    def show_swarm_dialog(self):
-        """
-        Show the Docker Swarm dialog.
-        """
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Docker Swarm")
-
-        layout = QVBoxLayout(dialog)
-
-        # Initialize Swarm button
-        init_swarm_button = QPushButton("Initialize Swarm", dialog)
-        init_swarm_button.clicked.connect(self.initialize_swarm)
-        layout.addWidget(init_swarm_button)
-
-        # Deploy Service button
-        deploy_service_button = QPushButton("Deploy Service", dialog)
-        deploy_service_button.clicked.connect(self.deploy_service_prompt)
-        layout.addWidget(deploy_service_button)
-
-        # Scale Service button
-        scale_service_button = QPushButton("Scale Service", dialog)
-        scale_service_button.clicked.connect(self.scale_service_prompt)
-        layout.addWidget(scale_service_button)
-
-        # View Nodes button
-        view_nodes_button = QPushButton("View Nodes", dialog)
-        view_nodes_button.clicked.connect(self.view_nodes)
-        layout.addWidget(view_nodes_button)
-
-        # Leave Swarm button
-        leave_swarm_button = QPushButton("Leave Swarm", dialog)
-        leave_swarm_button.clicked.connect(self.leave_swarm)
-        layout.addWidget(leave_swarm_button)
-
-        dialog.setLayout(layout)
-        dialog.exec_()
-
-    def leave_swarm(self):
-        """
-        Leave the Docker Swarm.
-        """
-        result = self.swarm.leave_swarm()
-        self.display_result(result)
-
-    def run_swarm_action(self, action, *args):
-        self.thread = SwarmThread(self.swarm, action, *args)
-        self.thread.start()
-        self.thread.finished.connect(self.handle_swarm_action_result)
-
-    def handle_swarm_action_result(self):
-        # Handle the result after the thread finishes
-        pass
-
-    def initialize_swarm(self):
-        self.run_swarm_action("initialize")
-        self.display_result(f"Swarm initialized!")
-
-    def show_result_dialog(self, result):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Result")
-
-        layout = QVBoxLayout(dialog)
-
-        result_text = QTextEdit(dialog)
-        result_text.setText(result)
-        result_text.setReadOnly(True)
-        layout.addWidget(result_text)
-
-        ok_button = QPushButton("OK", dialog)
-        ok_button.clicked.connect(dialog.accept)
-        layout.addWidget(ok_button)
-
-        dialog.setLayout(layout)
-        dialog.exec_()
-
-    def deploy_service_prompt(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Deploy Service")
-        layout = QVBoxLayout(dialog)
-        
-        service_name_label = QLabel("Service Name:")
-        service_name_input = QLineEdit(dialog)
-        layout.addWidget(service_name_label)
-        layout.addWidget(service_name_input)
-
-        image_name_label = QLabel("Image Name:")
-        image_name_input = QLineEdit(dialog)
-        layout.addWidget(image_name_label)
-        layout.addWidget(image_name_input)
-
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("Deploy", dialog)
-        cancel_button = QPushButton("Cancel", dialog)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        layout.addLayout(button_layout)
-
-        ok_button.clicked.connect(lambda: self.start_deploy_service(service_name_input.text(), image_name_input.text(), dialog))
-        cancel_button.clicked.connect(dialog.reject)
-
-        dialog.exec_()
-
-    def start_deploy_service(self, service_name, image_name, dialog):
-        self.deploy_thread = DeployServiceThread(self.swarm, service_name, image_name)
-        self.deploy_thread.result.connect(lambda result: self.handle_deploy_result(result, dialog))
-        self.deploy_thread.start()
-
-    def handle_deploy_result(self, result, dialog):
-        self.show_result_dialog(result)
-        dialog.accept() if "Error" not in result else dialog.reject()
-
-    def show_result_dialog(self, result):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Result")
-
-        layout = QVBoxLayout(dialog)
-
-        result_text = QTextEdit(dialog)
-        result_text.setText(result)
-        result_text.setReadOnly(True)
-        layout.addWidget(result_text)
-
-        ok_button = QPushButton("OK", dialog)
-        ok_button.clicked.connect(dialog.accept)
-        layout.addWidget(ok_button)
-
-        dialog.setLayout(layout)
-        dialog.exec_()
-
-    def scale_service_prompt(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Scale Service")
-        layout = QVBoxLayout(dialog)
-        
-        service_name_label = QLabel("Service Name:")
-        service_name_input = QLineEdit(dialog)
-        layout.addWidget(service_name_label)
-        layout.addWidget(service_name_input)
-
-        replicas_label = QLabel("Number of Replicas:")
-        replicas_input = QLineEdit(dialog)
-        layout.addWidget(replicas_label)
-        layout.addWidget(replicas_input)
-
-        button_layout = QHBoxLayout()
-        ok_button = QPushButton("Scale", dialog)
-        cancel_button = QPushButton("Cancel", dialog)
-        button_layout.addWidget(ok_button)
-        button_layout.addWidget(cancel_button)
-        layout.addLayout(button_layout)
-
-        ok_button.clicked.connect(lambda: self.start_scale_service(service_name_input.text(), replicas_input.text(), dialog))
-        cancel_button.clicked.connect(dialog.reject)
-
-        dialog.exec_()
-
-    def start_scale_service(self, service_name, replicas, dialog):
-        self.scale_thread = ScaleServiceThread(self.swarm, service_name, replicas)
-        self.scale_thread.result.connect(lambda result: self.handle_scale_result(result, dialog))
-        self.scale_thread.start()
-
-    def handle_scale_result(self, result, dialog):
-        self.show_result_dialog(result)
-        dialog.accept() if "Error" not in result else dialog.reject()
-
-    def view_nodes(self):
-        """
-        View the nodes in Docker Swarm.
-        """
-        result = self.swarm.view_nodes()
-        self.display_result(result)
